@@ -1,0 +1,9 @@
+[
+  {
+    "id": "stockfish-native",
+    "name": "Stockfish native",
+    "description": "Your locally installed native Stockfish binary.",
+    "command": "/usr/local/bin/stockfish",
+    "args": []
+  }
+]

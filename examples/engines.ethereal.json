@@ -1,0 +1,9 @@
+[
+  {
+    "id": "ethereal-native",
+    "name": "Ethereal (native)",
+    "description": "Optional locally installed Ethereal UCI engine.",
+    "command": "/usr/games/ethereal-chess",
+    "args": []
+  }
+]

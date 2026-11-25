@@ -1,0 +1,40 @@
+name: Bug Report
+description: Report a reproducible application, chess, or engine integration problem.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not post secrets, sensitive games, or security vulnerabilities here. Read SECURITY.md for private reporting.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe expected and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal non-sensitive FEN or PGN, selected engine, and settings where relevant.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Version and environment
+      description: App revision, Node version, OS/architecture, browser, engine version.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or benchmark export
+      description: Redact tokens, local paths, private games, and personal information.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked existing issues and removed sensitive information.
+          required: true

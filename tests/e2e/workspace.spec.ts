@@ -1,0 +1,348 @@
+import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import type { BenchmarkResult, Job } from '../../src/shared/types';
+
+async function pauseAnalysis(page: Page) {
+  await page.getByRole('checkbox', { name: 'Live analysis' }).uncheck();
+}
+
+async function freshBoard(page: Page) {
+  await page.getByRole('button', { name: 'New analysis', exact: true }).click();
+  await page.getByRole('button', { name: /Starting position/ }).click();
+}
+
+async function importPgn(page: Page, pgn: string) {
+  await page.getByRole('button', { name: 'Import game', exact: true }).click();
+  await page.getByLabel('Paste your game notation').fill(pgn);
+  await page.getByRole('button', { name: 'Open in workspace' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Think one move further.' })).toBeVisible();
+});
+
+test('loads a real UCI evaluation and configurable principal variations', async ({
+  page,
+}, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const depth = page.getByLabel('Search depth', { exact: true });
+  await depth.focus();
+  await depth.press('Home');
+  for (let i = 0; i < 7; i++) await depth.press('ArrowRight');
+  await expect(page.getByTestId('engine-score')).not.toHaveText('\u2014');
+  await expect(page.locator('.variation')).toHaveCount(3);
+  await expect(page.locator('.status-label')).toHaveText('Complete');
+  await expect(page.locator('.error-message')).toHaveCount(0);
+  const visibleMove = await page.locator('.notation-scroll').evaluate((parent) => {
+    const active = parent.querySelector('[aria-current="step"]')!;
+    return (
+      active.getBoundingClientRect().top >= parent.getBoundingClientRect().top &&
+      active.getBoundingClientRect().bottom <= parent.getBoundingClientRect().bottom
+    );
+  });
+  expect(visibleMove).toBe(true);
+  await page.screenshot({
+    path: `artifacts/analysis-${info.project.name}.jpg`,
+    fullPage: true,
+    quality: 85,
+    scale: 'css',
+  });
+  await page.getByText('Advanced settings', { exact: true }).click();
+  await page.getByLabel('Analysis threads').selectOption('2');
+  await page.getByLabel('Analysis hash').selectOption('32');
+  await page.getByLabel('Principal variations').selectOption('2');
+  await expect(page.locator('.variation')).toHaveCount(2);
+  await expect(page.locator('.status-label')).toHaveText('Complete');
+  expect(errors).toEqual([]);
+});
+
+test('plays legal moves, rejects an illegal destination, and persists the workspace', async ({
+  page,
+}) => {
+  await pauseAnalysis(page);
+  await freshBoard(page);
+  await page.getByRole('button', { name: 'e2 White pawn', exact: true }).click();
+  await page.getByRole('button', { name: 'e5 empty', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'e2 White pawn', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'e2 White pawn', exact: true }).click();
+  await page.getByRole('button', { name: 'e4 empty, legal destination', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'e4 White pawn', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Go to move 1. e4', exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'e4 White pawn', exact: true })).toBeVisible();
+  await expect(page.locator('.move-position')).toHaveText('1 / 1');
+});
+
+test('supports desktop dragging and mobile touch selection', async ({ page, isMobile }) => {
+  await pauseAnalysis(page);
+  await freshBoard(page);
+  if (isMobile) {
+    await page.locator('#square-d2').tap();
+    await page.locator('#square-d4').tap();
+  } else {
+    await page.locator('#square-d2').dragTo(page.locator('#square-d4'));
+  }
+  await expect(page.getByRole('button', { name: 'd4 White pawn', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Go to move 1. d4', exact: true })).toBeVisible();
+});
+
+test('copies the exact FEN to the clipboard', async ({ page, context }) => {
+  await pauseAnalysis(page);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByRole('button', { name: 'Copy FEN', exact: true }).click();
+  const fen = await page.evaluate(() => navigator.clipboard.readText());
+  expect(fen).toBe('rn2kb1r/pp2qppp/2p2n2/4p3/2B1P3/1QN5/PPP2PPP/R1B1K2R w KQkq - 0 9');
+});
+
+test('recovers from invalid saved browser data without crashing', async ({ page }) => {
+  await pauseAnalysis(page);
+  await page.evaluate(() => localStorage.setItem('ocl-workspace-v1', '{broken json'));
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Think one move further.' })).toBeVisible();
+  await expect(page.locator('.move-position')).toHaveText('16 / 33');
+  await pauseAnalysis(page);
+});
+
+test('navigates the main line, flips the board, and supports board keyboard input', async ({
+  page,
+}) => {
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Previous move', exact: true }).click();
+  await expect(page.locator('.move-position')).toHaveText('15 / 33');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.move-position')).toHaveText('16 / 33');
+  await page.getByRole('button', { name: 'Flip board', exact: true }).click();
+  await expect(page.locator('.square').first()).toHaveAttribute('id', 'square-h1');
+  await freshBoard(page);
+  await page.getByRole('button', { name: 'Flip board', exact: true }).click();
+  await page.locator('#square-e2').focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('#square-e4')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'e4 White pawn', exact: true })).toBeVisible();
+  await expect(page.locator('#square-e4')).toBeFocused();
+  for (let step = 0; step < 3; step++) await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'e5 Black pawn', exact: true })).toBeVisible();
+  await expect(page.locator('#square-e5')).toBeFocused();
+});
+
+test('imports a PGN file and downloads a real PGN export', async ({ page }) => {
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Import game', exact: true }).click();
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'test-game.pgn',
+    mimeType: 'application/x-chess-pgn',
+    buffer: Buffer.from('[White "Test White"]\n[Black "Test Black"]\n\n1. e4 e5 2. Nf3 Nc6 *'),
+  });
+  await expect(page.getByLabel('Paste your game notation')).toHaveValue(/Test White/);
+  await page.getByRole('button', { name: 'Open in workspace' }).click();
+  await expect(page.locator('.move-position')).toHaveText('4 / 4');
+  await expect(page.getByText('Test White', { exact: true })).toBeVisible();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export PGN', exact: true }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe('openchesslab-game.pgn');
+});
+
+test('validates FEN input and presents legal underpromotion choices', async ({ page }) => {
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Load FEN', exact: true }).click();
+  await page.getByLabel('Paste your FEN position').fill('invalid FEN');
+  await page.getByRole('button', { name: 'Open in workspace' }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.getByLabel('Paste your FEN position').fill('7k/P7/6K1/8/8/8/8/8 w - - 0 1');
+  await page.getByRole('button', { name: 'Open in workspace' }).click();
+  await page.getByRole('button', { name: 'a7 White pawn', exact: true }).click();
+  await page.getByRole('button', { name: 'a8 empty, legal destination', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Choose your promotion' })).toBeVisible();
+  await page.getByRole('button', { name: 'Promote to knight' }).click();
+  await expect(page.getByRole('button', { name: 'a8 White knight', exact: true })).toBeVisible();
+});
+
+test('reviews a real game and visualizes its measured turning points', async ({ page }) => {
+  await pauseAnalysis(page);
+  await importPgn(page, '1. f3 e5 2. g4 Qh4# 0-1');
+  await page.getByRole('button', { name: /Review this game/ }).click();
+  await expect(page.getByRole('button', { name: /Review again/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Go to move 2. g4', exact: true })).toHaveClass(
+    /blunder/,
+  );
+  await expect(page.getByRole('img', { name: /Game evaluation by half-move/ })).toBeVisible();
+  await expect(page.locator('.review-summary')).toContainText('blunders');
+  await expect(page.locator('.error-message')).toHaveCount(0);
+});
+
+test('compares two real engines and exports measured JSON and CSV', async ({ page }, info) => {
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Engine arena', exact: true }).click();
+  await page.getByRole('spinbutton', { name: 'Benchmark depth' }).fill('6');
+  await page.getByRole('button', { name: /Compare engines/ }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+  await expect(page.locator('.error-message')).toHaveCount(0);
+  await page.screenshot({
+    path: `artifacts/engines-${info.project.name}.jpg`,
+    fullPage: true,
+    quality: 85,
+    scale: 'css',
+  });
+  const jsonPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'JSON', exact: true }).click();
+  const download = await jsonPromise;
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk as Uint8Array));
+  const result = JSON.parse(Buffer.concat(chunks).toString('utf8')) as BenchmarkResult;
+  expect(result.rows).toHaveLength(2);
+  expect(result.rows.every((row) => row.nodes > 0 && row.nps > 0)).toBe(true);
+  expect(result.settings.depth).toBe(6);
+  const csvPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).click();
+  expect((await csvPromise).suggestedFilename()).toMatch(/\.csv$/);
+});
+
+test('runs the three-position benchmark suite and retains results across navigation', async ({
+  page,
+}) => {
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
+  await page.locator('.engine-option').nth(1).click();
+  await page.getByRole('spinbutton', { name: 'Benchmark depth' }).fill('5');
+  await page.getByRole('button', { name: /Run benchmark/ }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+  await expect(page.locator('.table-footer')).toContainText('1 run this session');
+  await page.getByRole('button', { name: 'Engine arena', exact: true }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+});
+
+test('stops an in-progress analysis on the server', async ({ page }) => {
+  await pauseAnalysis(page);
+  await page.getByLabel('Search depth', { exact: true }).focus();
+  await page.keyboard.press('End');
+  const created = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/analysis') && response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  const id = ((await created).json() as Promise<Job>).then((job) => job.id);
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect
+    .poll(
+      async () => ((await (await page.request.get(`/api/jobs/${await id}`)).json()) as Job).status,
+    )
+    .toBe('cancelled');
+  await expect(page.getByRole('checkbox', { name: 'Live analysis' })).not.toBeChecked();
+});
+
+test('opens usable documentation and keeps all workspace views within the viewport', async ({
+  page,
+  isMobile,
+}) => {
+  await pauseAnalysis(page);
+  const box = await page.locator('.chessboard').boundingBox();
+  expect(box).not.toBeNull();
+  expect(Math.abs(box!.width - box!.height)).toBeLessThan(1);
+  for (const name of ['Analysis board', 'Engine arena', 'Benchmarks', 'Documentation']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+  }
+  await expect(page.getByRole('heading', { name: 'Welcome to OpenChessLab' })).toBeVisible();
+  await page.getByRole('button', { name: 'Getting started', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Installation', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'API reference', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'API Reference', exact: true })).toBeVisible();
+  if (!isMobile) {
+    for (const width of [320, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const name of ['Analysis board', 'Engine arena', 'Documentation']) {
+        await page.getByRole('button', { name, exact: true }).click();
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+          .toBe(true);
+      }
+    }
+  }
+});
+
+test('passes automated accessibility checks for the analysis workspace and import dialog', async ({
+  page,
+}, info) => {
+  await pauseAnalysis(page);
+  const workspace = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  await info.attach('workspace-accessibility.json', {
+    body: JSON.stringify(workspace.violations, null, 2),
+    contentType: 'application/json',
+  });
+  expect(
+    workspace.violations.map((item) => ({
+      id: item.id,
+      nodes: item.nodes.map((node) => ({ target: node.target, summary: node.failureSummary })),
+    })),
+  ).toEqual([]);
+  await page.getByRole('button', { name: 'Import game', exact: true }).click();
+  const dialog = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  await info.attach('dialog-accessibility.json', {
+    body: JSON.stringify(dialog.violations, null, 2),
+    contentType: 'application/json',
+  });
+  expect(
+    dialog.violations.map((item) => ({
+      id: item.id,
+      nodes: item.nodes.map((node) => ({ target: node.target, summary: node.failureSummary })),
+    })),
+  ).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Import game', exact: true })).toBeFocused();
+});
+
+test('keeps experiment and documentation views accessible and internal guides navigable', async ({
+  page,
+  isMobile,
+}) => {
+  await pauseAnalysis(page);
+  if (!isMobile) {
+    await page.setViewportSize({ width: 900, height: 900 });
+    const collapsed = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+      .analyze();
+    expect(collapsed.violations.map((violation) => violation.id)).toEqual([]);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  }
+  for (const name of ['Engine arena', 'Benchmarks', 'Documentation']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    if (isMobile && name !== 'Documentation') {
+      await page.getByRole('region', { name: 'Engine search results' }).focus();
+      await page.keyboard.press('ArrowRight');
+      await expect
+        .poll(() => page.locator('.table-scroll').evaluate((element) => element.scrollLeft))
+        .toBeGreaterThan(0);
+    }
+    const report = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+      .analyze();
+    expect(
+      report.violations.map((violation) => ({
+        id: violation.id,
+        targets: violation.nodes.map((node) => node.target),
+      })),
+    ).toEqual([]);
+  }
+  await page.getByRole('button', { name: 'Contribute to the project', exact: true }).click();
+  await page.getByRole('button', { name: 'Code of Conduct', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Code of Conduct', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Development guide', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Development Guide', exact: true })).toBeVisible();
+});

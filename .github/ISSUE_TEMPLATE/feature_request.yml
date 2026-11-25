@@ -1,0 +1,23 @@
+name: Feature Proposal
+description: Propose a concrete improvement to a chess or engine research workflow.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Which problem would this solve?
+      description: Describe the person and workflow affected, rather than only a proposed technology.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include an example and alternatives considered.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: How could we verify success?
+      description: Consider chess correctness, reproducibility, accessibility, and security.

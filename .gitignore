@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+engines.local.json
+*.log
+*.tgz
+*.tar.gz
+SHA256SUMS.txt
+.DS_Store
+.cache/
+artifacts/

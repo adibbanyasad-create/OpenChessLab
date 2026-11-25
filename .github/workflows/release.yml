@@ -1,0 +1,51 @@
+name: Release Build
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify and Prepare Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: node scripts/verify-release.mjs
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run check
+      - run: npm run security
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Pack the application and record integrity checksum
+        run: npm run release:pack
+      - name: Verify the archived production installation
+        run: |
+          mkdir -p "$RUNNER_TEMP/openchesslab-release"
+          tar -xzf OpenChessLab-*.tar.gz -C "$RUNNER_TEMP/openchesslab-release"
+          npm ci --omit=dev --ignore-scripts --prefix "$RUNNER_TEMP/openchesslab-release/OpenChessLab"
+          node scripts/smoke-release.mjs "$RUNNER_TEMP/openchesslab-release/OpenChessLab"
+      - name: Create a draft release for maintainer review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" OpenChessLab-*.tar.gz SHA256SUMS.txt \
+            --verify-tag --draft --title "OpenChessLab $GITHUB_REF_NAME" \
+            --notes-file CHANGELOG.md

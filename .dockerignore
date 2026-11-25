@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.cache
+.env
+.env.*
+engines.local.json
+artifacts
+coverage
+test-results
+playwright-report
+*.tgz
+*.tar.gz
+*.log
