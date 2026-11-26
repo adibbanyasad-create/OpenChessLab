@@ -40,7 +40,6 @@ import { Chess } from 'chess.js';
 import { branchGame, DEFAULT_POSITION, gameFromFen, OPERA_PGN, parseGame } from '../shared/chess';
 import type {
   AnalysisResult,
-  BenchmarkResult,
   EngineDescriptor,
   GameData,
   ReviewResult,
@@ -115,7 +114,6 @@ export function App() {
   const reviewIntent = useRef(0);
   const moveFocus = useRef<string | null>(null);
   const [reviewedPgn, setReviewedPgn] = useState('');
-  const [history, setHistory] = useState<BenchmarkResult[]>([]);
   const [toast, setToast] = useState('');
   const [doc, setDoc] = useState('overview');
   const analysis = useRemoteJob<AnalysisResult>();
@@ -146,7 +144,7 @@ export function App() {
       document.getElementById(`square-${moveFocus.current}`)?.focus({ preventScroll: true });
       moveFocus.current = null;
     }
-  }, [fen]);
+  }, [fen, flipped]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -186,21 +184,32 @@ export function App() {
   const autoAnalyze = useEffectEvent(startAnalysis);
   const cancelAnalysis = analysis.cancel;
   useEffect(() => {
-    if (!live || view !== 'analysis' || reviewBusy || !engines.length) return;
-    const timer = setTimeout(() => autoAnalyze(), 500);
+    const timer =
+      live && view === 'analysis' && !reviewBusy && engines.length
+        ? setTimeout(() => autoAnalyze(), 500)
+        : undefined;
     return () => {
       clearTimeout(timer);
       void cancelAnalysis();
     };
   }, [fen, settings, engineId, live, view, reviewBusy, engines.length, cancelAnalysis]);
 
+  const flipBoard = () => {
+    const focused = document.activeElement?.id;
+    moveFocus.current = focused?.startsWith('square-') ? focused.slice(7) : null;
+    setFlipped((value) => !value);
+  };
+
   const keyboardNavigation = useEffectEvent((event: KeyboardEvent) => {
     if (
+      event.defaultPrevented ||
       dialog ||
+      document.querySelector('dialog[open]') ||
       event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
-      (event.target as HTMLElement).closest('input,textarea,select,[contenteditable]')
+      (event.target instanceof Element &&
+        event.target.closest('input,textarea,select,[contenteditable]'))
     )
       return;
     if (event.key === 'a') {
@@ -224,7 +233,7 @@ export function App() {
       event.preventDefault();
       setPly(game.moves.length);
     }
-    if (event.key === 'f') setFlipped((value) => !value);
+    if (event.key === 'f') flipBoard();
     if (event.key === '?') setDialog('shortcuts');
   });
   useEffect(() => {
@@ -586,7 +595,7 @@ export function App() {
                       <div className="board-controls">
                         <button
                           className="icon-button"
-                          onClick={() => setFlipped(!flipped)}
+                          onClick={flipBoard}
                           aria-label="Flip board"
                           title="Flip board (F)"
                         >
@@ -677,7 +686,8 @@ export function App() {
                       lines={lines}
                       result={result}
                       busy={analysis.busy}
-                      error={analysis.error}
+                      error={searchedKey === searchKey ? analysis.error : ''}
+                      stopped={searchedKey === searchKey && analysis.stopped}
                       live={live}
                       setLive={setLive}
                       run={startAnalysis}
@@ -712,7 +722,7 @@ export function App() {
                         Move labels are depth-dependent estimates at up to {review.settings.depth}{' '}
                         plies, not definitive judgments.
                         {review.scores.some((point) => point.depthLimited)
-                          ? ' Some positions reached their time limit.'
+                          ? ' Some positions did not confirm the requested depth.'
                           : ''}
                       </p>
                     )}
@@ -727,12 +737,6 @@ export function App() {
                 mode={view}
                 engines={engines}
                 fen={fen}
-                history={history}
-                onResult={(result) =>
-                  setHistory((runs) =>
-                    [result, ...runs.filter((run) => run.id !== result.id)].slice(0, 20),
-                  )
-                }
                 onDocs={() => openDocs(view === 'benchmark' ? 'benchmarking' : 'configuration')}
               />
             )}

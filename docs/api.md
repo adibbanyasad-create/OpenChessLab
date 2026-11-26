@@ -39,7 +39,11 @@ Only `fen` is required; other defaults match the example. `hash` is in MB. Range
 
 A completed `AnalysisResult` includes `engineId`, the runtime `engineName`, `fen`, requested `settings`, actual `effectiveOptions`, `warnings`, `lines`, `bestMove`, measured `wallTimeMs`, `completedDepth`, `depthLimited`, and `terminal`.
 
+The returned FEN is canonicalized by the chess library and is the position actually sent to the engine. Extra printable spacing is normalized; inconsistent castling rights, impossible piece counts, and counters above 1,000,000 are rejected.
+
 Each line has depth, selective depth, MultiPV index, normalized score, total nodes, reported NPS, reported `timeMs`, hash fullness (per mille), legal UCI moves in `pv`, and corresponding `san` strings. `bestMove` uses UCI coordinate notation, including a promotion suffix. Terminal results can have no best move and zero search work.
+
+Starting in 0.2, `depth`, `seldepth`, `nodes`, `nps`, `timeMs`, and `hashfull` are nullable. `completedDepth` can also be null. Missing or invalid measurements are not replaced with zero or inferred from other counters. Search-wide counters can arrive in separate UCI `info` messages; the result retains the latest reported values while preserving each scored PV's own depth. `info string` text is never interpreted as measurements. `depthLimited` means the requested depth was not confirmed, not proof that a time cap was the reason. See [migration notes](migration-0.2.md).
 
 ## Review a Game
 
@@ -56,7 +60,7 @@ Each line has depth, selective depth, MultiPV index, normalized score, total nod
 }
 ```
 
-Requires a nonempty main line of at most 200 half-moves. Maximum review depth is 14, and MultiPV must be 1. The result contains `scores` indexed by ply and move `annotations` with classification, estimated loss, SAN, and the prior position's best move. Each score records actual depth and whether the per-position time cap was reached. See [usage](usage.md) for classification caveats.
+Requires a nonempty main line of at most 200 half-moves. Maximum review depth is 14, and MultiPV must be 1. The result contains `scores` indexed by ply and move `annotations` with classification, estimated loss, SAN, and the prior position's best move. Each score records reported depth (or null) and whether the requested depth was not confirmed. See [usage](usage.md) for classification caveats.
 
 ## Benchmark or Compare
 
@@ -80,7 +84,7 @@ Requires a nonempty main line of at most 200 half-moves. Maximum review depth is
 
 Select 1-4 unique engine IDs and 1-8 valid positions. MultiPV must be 1. Runs are sequential and exclusive within this server. A busy server returns 409 rather than silently adding competing searches.
 
-The result contains an ID, timestamp, requested settings, environment metadata, and one row per engine/position. Rows include requested/actual depth, score, best move, engine-reported nodes/NPS/time, measured wall time, effective options, and warnings.
+New results contain an ID, `appVersion`, timestamp, requested settings, environment metadata, and one row per engine/position. Rows include requested/reported depth, score, best move, engine-reported nodes/NPS/time, measured wall time, effective options, and warnings. Reported depth, nodes, NPS, and engine time can be null. Wall-clock time is measured by the server. Older exports may omit `appVersion`; do not guess it from the current server version.
 
 ## Poll and Cancel
 
@@ -105,6 +109,8 @@ Statuses are `running`, `completed`, `failed`, and `cancelled`. Terminal jobs in
 `GET /api/jobs/:id/export?format=csv` downloads a completed benchmark as CSV. `format=json` returns its complete result. Exporting an unfinished or non-benchmark job returns 409.
 
 CSV strings that begin with spreadsheet formula markers are escaped. Columns include settings, actual options, warnings, timestamps, and environment. Export JSON when you need exact structured values, especially scores and option maps.
+
+Missing measurements are empty CSV cells, corresponding to null in JSON. The `app_version` column is appended to the existing columns. A true reported zero remains zero. Do not coerce empty CSV cells to measured zero in downstream analysis.
 
 ## Error Statuses
 

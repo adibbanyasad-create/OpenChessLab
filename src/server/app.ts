@@ -61,7 +61,7 @@ export async function createApp(
   };
   const checkFen = (fen: string) => {
     try {
-      validPosition(fen);
+      return validPosition(fen).fen();
     } catch (error) {
       throw new AppError(400, error instanceof Error ? error.message : 'Invalid position.');
     }
@@ -128,12 +128,11 @@ export async function createApp(
       if (!sameOrigin || request.headers['sec-fetch-site'] === 'cross-site')
         throw new AppError(403, 'Cross-origin requests are not allowed.');
     }
-    if (
-      config.apiToken &&
-      request.url.startsWith('/api/') &&
-      request.url.split('?')[0] !== '/api/health'
-    ) {
-      const supplied = request.headers.authorization?.replace(/^Bearer /, '') ?? '';
+    const route = request.routeOptions.url;
+    const apiRequest = route?.startsWith('/api/') || /^\/api(?:\/|\?|$)/.test(request.url);
+    if (config.apiToken && apiRequest && route !== '/api/health') {
+      const supplied =
+        /^Bearer ([\x21-\x7e]+)$/i.exec(request.headers.authorization ?? '')?.[1] ?? '';
       const digest = (value: string) => createHash('sha256').update(value).digest();
       if (!timingSafeEqual(digest(supplied), digest(config.apiToken)))
         throw new AppError(
@@ -152,7 +151,8 @@ export async function createApp(
       'Content-Security-Policy',
       `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors ${config.frameAncestors}`,
     );
-    if (_request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
+    if (/^\/api(?:\/|\?|$)/.test(_request.url) || _request.routeOptions.url?.startsWith('/api/'))
+      reply.header('Cache-Control', 'no-store');
   });
 
   if (options.rateLimit !== false)
@@ -178,7 +178,7 @@ export async function createApp(
 
   app.post('/api/analysis', costly, async (request, reply) => {
     const input = analysisSchema.parse(request.body);
-    checkFen(input.fen);
+    input.fen = checkFen(input.fen);
     const engine = lookupEngine(input.engineId);
     const job = jobs.create('analysis', (signal, progress) =>
       analyzePosition(engine, input, signal, progress),
@@ -202,7 +202,10 @@ export async function createApp(
 
   app.post('/api/benchmarks', costly, async (request, reply) => {
     const input = benchmarkSchema.parse(request.body);
-    input.positions.forEach((position) => checkFen(position.fen));
+    input.positions = input.positions.map((position) => ({
+      ...position,
+      fen: checkFen(position.fen),
+    }));
     const selected = input.engineIds.map(lookupEngine);
     const job = jobs.create('benchmark', (signal, progress, id) =>
       runBenchmark(selected, input, signal, progress, id),
@@ -232,7 +235,7 @@ export async function createApp(
     app.setNotFoundHandler((request, reply) => {
       if (
         request.method === 'GET' &&
-        !request.url.startsWith('/api/') &&
+        !/^\/api(?:\/|\?|$)/.test(request.url) &&
         !/\.[a-z0-9]+(?:\?|$)/i.test(request.url)
       )
         return reply.sendFile('index.html');

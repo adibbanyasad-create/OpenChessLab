@@ -15,7 +15,7 @@ When redistributing the engine or a container that includes it, comply with GPL-
 
 ## Application Dependencies
 
-- React, React DOM, Vite, Fastify and its plugins, Zod, and react-markdown: MIT or their package-declared permissive licenses.
+- React, React DOM, Vite, Fastify and its plugins, Zod, react-markdown, and remark-gfm: MIT or their package-declared permissive licenses.
 - chess.js: BSD-2-Clause.
 - Lucide icon artwork/library: ISC.
 - Inter: SIL Open Font License 1.1; served locally through `@fontsource-variable/inter`.

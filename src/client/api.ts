@@ -4,7 +4,8 @@ let memoryToken = '';
 
 export function getToken(): string {
   try {
-    return sessionStorage.getItem('ocl-token') ?? memoryToken;
+    memoryToken = sessionStorage.getItem('ocl-token') ?? '';
+    return memoryToken;
   } catch {
     return memoryToken;
   }
@@ -22,13 +23,12 @@ export function setToken(token: string): void {
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
+  const headers = new Headers(options.headers);
+  if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
   const response = await fetch(`/api${path}`, {
     ...options,
-    headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
+    headers,
     signal: options.signal
       ? AbortSignal.any([options.signal, AbortSignal.timeout(20_000)])
       : AbortSignal.timeout(20_000),

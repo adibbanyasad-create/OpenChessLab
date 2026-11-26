@@ -16,7 +16,7 @@ Screenshots show actual runtime engine output, not seeded demo scores. Their inc
 
 ## Start Here
 
-Requirements: **Node.js 22.12+ or 24**, npm, and a modern browser. Node 22 is recommended and is used in CI. The npm installation includes the separate Stockfish.js engine package; allow approximately 205 MB for that package alone.
+Requirements: **Node.js 22.12+, 24, or 26**, npm, and a modern browser. Node 24 is the default development/container runtime; CI covers all three supported major versions. The npm installation includes the separate Stockfish.js engine package; allow approximately 205 MB for that package alone.
 
 ```bash
 git clone https://github.com/adibbanyasad-create/OpenChessLab.git
@@ -40,14 +40,16 @@ Open **http://localhost:5173**. Vite proxies `/api` to the local engine service.
 ## What You Can Do
 
 - **Analyze a position:** import a single PGN game or a FEN, make legal moves, choose a promotion, and navigate the main line. Desktop drag-and-drop, touch selection, and keyboard controls are supported.
-- **Inspect real engine output:** White-normalized evaluations, mate scores, up to five principal variations in SAN, depth, engine-reported nodes per second, and search time.
+- **Inspect real engine output:** White-normalized evaluations, mate scores, up to five principal variations in SAN, depth, engine-reported nodes per second, and search time. Unreported measurements are shown as unavailable, not invented zeros.
 - **Control the search:** depth 1-24, 1-4 threads, and 16-512 MB of hash. Unsupported engine options and time-limited searches are explicitly reported.
 - **Review a game:** analyze consecutive positions, visualize an evaluation timeline, and flag estimated inaccuracies, mistakes, and blunders. Labels are heuristics, not an accuracy rating.
 - **Compare engines:** the same position, settings, and protocol, with both bundled engines or your own server-configured UCI executable.
 - **Benchmark honestly:** sequential searches, per-position UCI state resets, environment metadata, measured search wall time, engine-reported nodes and NPS, and JSON/CSV exports. No scores appear until an experiment completes.
-- **Keep your work:** the active game is restored from browser storage when available. Export PGN and FEN, or download benchmark records for permanent storage.
+- **Keep your work:** restore the active game and up to 20 validated benchmark records from browser storage. Historical rows retain the engine name/version actually reported during the run. Export PGN, FEN, JSON, and CSV; clear benchmark history independently of your game.
 
-The [verification report](docs/verification.md) records the checks performed for the initial source snapshot. Current hosted checks are available in the repository's [Actions tab](https://github.com/adibbanyasad-create/OpenChessLab/actions). A passing workflow is not evidence of a production deployment.
+The [verification report](docs/verification.md) records observed checks and their scope, with the initial report preserved separately. Current hosted checks are available in the repository's [Actions tab](https://github.com/adibbanyasad-create/OpenChessLab/actions). A passing workflow is not evidence of a production deployment.
+
+Upgrading an API client from 0.1? Read the [0.2 migration notes](docs/migration-0.2.md): optional UCI measurements now use `null` when unavailable.
 
 ## A Deliberately Small Architecture
 
@@ -105,6 +107,7 @@ Use PowerShell's `$env:ENGINES_CONFIG` on Windows. Custom engines must speak UCI
 ```bash
 npm run lint
 npm run typecheck
+npm run docs:check
 npm test
 npm run test:coverage
 npm run build
@@ -113,7 +116,9 @@ npm run test:e2e
 npm run security
 ```
 
-The integration suite runs actual Stockfish searches. Browser tests exercise the production build and real API. CI checks pull requests on Linux with Node 22 and 24, builds the application, runs browser tests, and audits dependencies. A tag-driven release workflow creates a versioned application archive and SHA-256 checksum after passing checks.
+The integration suite runs actual Stockfish searches. Browser tests exercise the production build and real API, including cancellation, restoration, keyboard controls, and accessibility checks. CI is configured for Node 22, 24, and 26, clean production-archive installation, and a container runtime check. Weekly regression, dependency-audit, and CodeQL workflows provide recurring checks. Dependency updates are proposed as reviewable PRs, not silently merged. A tag-driven release workflow creates a draft release archive and SHA-256 checksum after checks pass.
+
+See the [maintenance guide](docs/maintenance.md) for what runs automatically, what still needs a maintainer, and how to handle failed checks. Automation does not guarantee continuous monitoring, safe automatic fixes, or security certification.
 
 ## Security and Privacy
 
@@ -121,7 +126,7 @@ This is a **single-user, local-first tool**, not an authenticated multi-tenant h
 
 To use a private remote server, set `OPENCHESSLAB_API_TOKEN` (at least 24 characters), configure `ALLOWED_HOSTS`, use HTTPS, and protect access at the network boundary. Never expose an unauthenticated engine service to the public internet. Tokens are entered through Connection settings and kept in tab-scoped session storage.
 
-Games are sent only to the configured same-origin server. Browser PGN state and short-lived server job results are not encrypted at rest. Benchmarks are kept in the UI session; completed server jobs expire after 30 minutes or a server restart, with at most 100 records retained. Read [SECURITY.md](SECURITY.md).
+Games are sent only to the configured same-origin server. Browser PGN state and benchmark history are not encrypted at rest. Saved benchmark history is bounded to 20 runs and 1 MB; storage failures fall back to the current session with a visible warning. Close other OpenChessLab tabs before clearing history. Completed server jobs expire after 30 minutes or a server restart, with at most 100 records retained. Read [SECURITY.md](SECURITY.md).
 
 ## Honest Limitations
 

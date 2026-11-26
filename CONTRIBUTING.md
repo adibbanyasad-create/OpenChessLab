@@ -15,7 +15,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. Use Node 22.12+ or 24. More setup details are in [the development guide](docs/development.md).
+Open `http://localhost:5173`. Use Node 22.12+, 24, or 26; Node 24 is recommended. More setup details are in [the development guide](docs/development.md).
 
 ## Change Standards
 
@@ -24,6 +24,7 @@ Open `http://localhost:5173`. Use Node 22.12+ or 24. More setup details are in [
 - Add a regression test for a bug fix. Cover engine failure/cancellation paths, not just the successful search.
 - Keep engine command paths in the administrator-controlled registry. Never expose shell commands, executable paths, engine uploads, or raw UCI from browser inputs.
 - Preserve White-perspective score semantics and actual versus requested depth.
+- Keep absent measurements distinct from measured zero. Test statistics-only UCI records, position-to-position resets, and stored-result provenance when changing the analysis contract.
 - Do not fabricate engine statistics, popularity, benchmark outcomes, or community activity. Clearly label illustrative fixtures as test fixtures.
 - Check keyboard navigation, reduced-motion settings, narrow screens, and useful error messages for UI changes.
 - Document changed API behavior and user-visible limits. Update the changelog for meaningful changes.

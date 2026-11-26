@@ -23,6 +23,8 @@ UCI scores are normally from the side-to-move perspective. The parser normalizes
 
 Principal variations are validated by replaying legal moves from the same FEN and converting them to SAN. At most 32 SAN moves are retained. Invalid suffixes are dropped; an invalid best move fails the job. Terminal checkmate, stalemate, and insufficient-material positions have explicit outcomes and no invented search work.
 
+The UCI parser accepts partial information records. Search-wide counters are accumulated separately from scored variations, so a later nodes/NPS/time record updates the final result without changing a PV's evaluation or its recorded depth. Unscoped depth records can supply context for a single-PV search; in MultiPV mode a variation must report its own depth. One variation's depth is never borrowed for another. All counters are reset per position. Absent or invalid measurements become null; explicit zeros remain zero. Text after the UCI `string` keyword is excluded from numeric parsing. A lower or unknown completed depth is reported without guessing why an engine stopped.
+
 Each position is searched independently. The server does not reconstruct repetition history or implement a new chess engine. Draw-claim handling and alternative variation-tree history are not represented as implemented features.
 
 ## Job Lifecycle
@@ -37,9 +39,13 @@ The registry holds at most 100 jobs. Expiry and oldest-finished eviction run on 
 
 The active main line and half-move index are saved as PGN in local storage and revalidated on restore. Making a move from an earlier position creates a replacement continuation. Browser state never stores live process handles.
 
-`useRemoteJob` coordinates creation, polling, cancellation, and stale-response suppression. Live analysis is debounced so navigating quickly does not spawn a search for every intermediate position. Only results matching the current FEN are displayed as its evaluation. Review results are tied to the exact PGN that was reviewed.
+The experiment view lazily loads a bounded benchmark-history store. A versioned schema validates restored records, preserving recorded engine names and application-version metadata. At most 20 runs and 1 MB are written. Unavailable/full storage falls back to an in-memory session with a visible warning; failed deletion is reported rather than claimed successful. History is local to a browser origin, not a synchronized database. Close other tabs before clearing it and export research records for long-term use.
+
+`useRemoteJob` coordinates creation, polling, cancellation, and stale-response suppression. Live analysis is debounced so navigating quickly does not spawn a search for every intermediate position. Manual searches are also cancelled when their position/settings change. Late creation responses are still received so the server job can be cancelled by ID. Only results matching the current FEN and settings are displayed. Review results are tied to the exact PGN that was reviewed.
 
 Dialogs use native modal focus management. The board supports pointer and keyboard input, legal destination hints, drag/drop, promotion, and accessible square names. Responsive layouts retain the same capabilities on mobile.
+
+Global shortcuts do not run behind native dialogs, including promotion and history confirmation. Focus is retained across keyboard moves and board flips. Secondary views and their validation code are lazy-loaded rather than added to the initial board bundle.
 
 ## Performance Decisions
 

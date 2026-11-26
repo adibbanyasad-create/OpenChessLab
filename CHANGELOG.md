@@ -1,8 +1,34 @@
 # Changelog
 
-Meaningful changes are recorded here. This initial source snapshot is prepared for release as 0.1.0; a public GitHub release has not been asserted or fabricated.
+Meaningful changes are recorded here. Source publication and a tagged GitHub release are separate events; no release or deployment is implied by a version heading alone.
 
-## 0.1.0 - Unreleased
+## 0.2.0 - Unreleased
+
+### Fixed
+
+- Optional UCI measurements are null when absent or invalid, not invented zeros. Separate statistics records are merged without carrying data between positions.
+- UCI text messages, malformed numeric fields, invalid MultiPV indices, and invalid PV suffixes cannot masquerade as valid measurements or lines.
+- Early engine stops are reported as unconfirmed requested depth, without assuming a time-limit event.
+- FEN spacing is canonicalized consistently, castling checks use canonical fields, and counters are bounded before engine use.
+- Manual searches are cancelled on navigation/settings changes. Stopped states, delayed creation responses, and stale results have explicit regression coverage.
+- Native promotion/history dialogs isolate global shortcuts. Board focus survives keyboard moves and flips, including non-element keyboard-event targets.
+- Benchmark depth entry preserves empty/invalid drafts instead of silently changing values. Results keep their recorded engine names rather than current registry labels.
+- Explicit token removal is respected, all supported RequestInit header representations are preserved, and bearer schemes are validated consistently.
+
+### Added
+
+- Validated browser-local benchmark history with a 20-run/1 MB bound, storage-failure fallback, and explicit clear-history behavior.
+- Application-version metadata in new benchmark reports and an appended CSV column.
+- Node 26 verification/support alongside Node 22 and 24, with Node 24 as the development/container default.
+- Weekly regression checks, static CodeQL configuration, pinned current GitHub Actions, clean archive smoke checks in ordinary CI, and a container HTTP/engine check.
+- A pinned multi-platform container base, reviewed Docker update proposals, local documentation-link checks, maintenance guidance, and coding-agent instructions.
+- Additional unit, API, browser, cancellation, storage, and protocol regression tests.
+
+### Compatibility
+
+Optional numeric response fields are nullable in 0.2. See [migration notes](docs/migration-0.2.md) before upgrading API consumers. Browser history is local and best-effort, not synchronized or encrypted persistence.
+
+## 0.1.0 - Initial Public Source Snapshot (2026-11-25)
 
 ### Added
 

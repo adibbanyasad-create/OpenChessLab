@@ -133,6 +133,15 @@ test('navigates the main line, flips the board, and supports board keyboard inpu
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'e5 Black pawn', exact: true })).toBeVisible();
   await expect(page.locator('#square-e5')).toBeFocused();
+  await page.keyboard.press('f');
+  await expect(page.locator('.square').first()).toHaveAttribute('id', 'square-h1');
+  await expect(page.locator('#square-e5')).toBeFocused();
+  await page.keyboard.press('f');
+  await expect(page.locator('#square-e5')).toBeFocused();
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '?' })));
+  await expect(page.getByRole('heading', { name: 'Stay in the flow' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#square-e5')).toBeFocused();
 });
 
 test('imports a PGN file and downloads a real PGN export', async ({ page }) => {
@@ -163,6 +172,11 @@ test('validates FEN input and presents legal underpromotion choices', async ({ p
   await page.getByRole('button', { name: 'a7 White pawn', exact: true }).click();
   await page.getByRole('button', { name: 'a8 empty, legal destination', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Choose your promotion' })).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('f');
+  await expect(page.getByRole('heading', { name: 'Choose your promotion' })).toBeVisible();
+  await expect(page.locator('.square').first()).toHaveAttribute('id', 'square-a8');
+  await expect(page.locator('#square-a7')).toHaveAttribute('aria-label', 'a7 White pawn');
   await page.getByRole('button', { name: 'Promote to knight' }).click();
   await expect(page.getByRole('button', { name: 'a8 White knight', exact: true })).toBeVisible();
 });
@@ -201,14 +215,18 @@ test('compares two real engines and exports measured JSON and CSV', async ({ pag
   for await (const chunk of stream) chunks.push(Buffer.from(chunk as Uint8Array));
   const result = JSON.parse(Buffer.concat(chunks).toString('utf8')) as BenchmarkResult;
   expect(result.rows).toHaveLength(2);
-  expect(result.rows.every((row) => row.nodes > 0 && row.nps > 0)).toBe(true);
+  expect(
+    result.rows.every(
+      (row) => row.nodes !== null && row.nodes > 0 && row.nps !== null && row.nps > 0,
+    ),
+  ).toBe(true);
   expect(result.settings.depth).toBe(6);
   const csvPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV' }).click();
   expect((await csvPromise).suggestedFilename()).toMatch(/\.csv$/);
 });
 
-test('runs the three-position benchmark suite and retains results across navigation', async ({
+test('retains real benchmark results across navigation and reload, then clears only history', async ({
   page,
 }) => {
   await pauseAnalysis(page);
@@ -217,9 +235,26 @@ test('runs the three-position benchmark suite and retains results across navigat
   await page.getByRole('spinbutton', { name: 'Benchmark depth' }).fill('5');
   await page.getByRole('button', { name: /Run benchmark/ }).click();
   await expect(page.locator('tbody tr')).toHaveCount(3);
-  await expect(page.locator('.table-footer')).toContainText('1 run this session');
+  await expect(page.locator('.table-footer')).toContainText('1 run saved locally');
   await page.getByRole('button', { name: 'Engine arena', exact: true }).click();
   await expect(page.locator('tbody tr')).toHaveCount(3);
+  await page.reload();
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+  await expect(page.locator('.table-footer')).toContainText('1 run saved locally');
+  await page.getByRole('button', { name: 'Clear saved benchmark history' }).click();
+  await page.keyboard.press('a');
+  await expect(page.getByRole('heading', { name: 'Clear saved benchmark history?' })).toBeVisible();
+  const confirmation = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  expect(confirmation.violations.map((violation) => violation.id)).toEqual([]);
+  await page.getByRole('button', { name: 'Clear history', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+  await expect(page.getByLabel('Position suite')).toBeFocused();
+  expect(await page.evaluate(() => localStorage.getItem('ocl-benchmarks-v1'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('ocl-workspace-v1'))).not.toBeNull();
 });
 
 test('stops an in-progress analysis on the server', async ({ page }) => {
@@ -239,6 +274,137 @@ test('stops an in-progress analysis on the server', async ({ page }) => {
     )
     .toBe('cancelled');
   await expect(page.getByRole('checkbox', { name: 'Live analysis' })).not.toBeChecked();
+  await expect(page.locator('.status-label')).toHaveText('Stopped');
+});
+
+test('cancels manual analysis when navigating to a different position', async ({ page }) => {
+  await pauseAnalysis(page);
+  await page.getByLabel('Search depth', { exact: true }).focus();
+  await page.keyboard.press('End');
+  const created = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/analysis') && response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  const job = (await (await created).json()) as Job;
+  await page.getByRole('button', { name: 'Next move', exact: true }).click();
+  await expect
+    .poll(
+      async () => ((await (await page.request.get(`/api/jobs/${job.id}`)).json()) as Job).status,
+    )
+    .toBe('cancelled');
+  await expect(page.getByTestId('engine-score')).toHaveText('\u2014');
+});
+
+test('cleans up a real job when cancellation happens before its creation response arrives', async ({
+  page,
+}) => {
+  await pauseAnalysis(page);
+  await freshBoard(page);
+  await page.getByLabel('Search depth', { exact: true }).focus();
+  await page.keyboard.press('End');
+  let id: string | undefined;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/analysis', async (route) => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(202);
+    id = ((await response.json()) as Job).id;
+    await gate;
+    await route.fulfill({ response });
+  });
+  try {
+    await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+    await expect.poll(() => id).toBeTruthy();
+    await page.getByRole('button', { name: 'Stop', exact: true }).click();
+    release();
+    await expect
+      .poll(async () => ((await (await page.request.get(`/api/jobs/${id}`)).json()) as Job).status)
+      .toBe('cancelled');
+    await expect(page.locator('.status-label')).toHaveText('Stopped');
+    await expect(page.getByTestId('engine-score')).toHaveText('\u2014');
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
+test('allows editing a benchmark depth without silently replacing an empty or invalid value', async ({
+  page,
+}) => {
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
+  const depth = page.getByRole('spinbutton', { name: 'Benchmark depth' });
+  await depth.fill('');
+  await expect(depth).toHaveValue('');
+  await expect(page.getByRole('button', { name: /Run benchmark/ })).toBeDisabled();
+  await depth.fill('25');
+  await expect(depth).toHaveAttribute('aria-invalid', 'true');
+  await depth.fill('10');
+  await expect(depth).toHaveValue('10');
+  await expect(page.getByRole('button', { name: /Run benchmark/ })).toBeEnabled();
+});
+
+test('shows missing measurements and the recorded engine name in historical data', async ({
+  page,
+}) => {
+  await pauseAnalysis(page);
+  // This is a storage/rendering fixture, never an application demo or a measured benchmark.
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'ocl-benchmarks-v1',
+      JSON.stringify({
+        version: 1,
+        runs: [
+          {
+            id: '00000000-0000-4000-8000-000000000001',
+            createdAt: '2026-11-25T00:00:00.000Z',
+            settings: { depth: 8, threads: 1, hash: 16, multiPv: 1 },
+            environment: { platform: 'linux', arch: 'x64', cpus: 2, node: 'v22.23.1' },
+            rows: [
+              {
+                engineId: 'stockfish-lite',
+                engineName: 'Historical fixture engine 1.0',
+                position: 'Rendering test only',
+                fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                depth: null,
+                requestedDepth: 8,
+                depthLimited: true,
+                nodes: null,
+                nps: null,
+                engineTimeMs: null,
+                wallTimeMs: 100,
+                score: { type: 'cp', value: 0 },
+                bestMove: 'e2e4',
+                effectiveOptions: {},
+                warnings: ['Test fixture: measurements not reported.'],
+              },
+            ],
+          },
+        ],
+      }),
+    ),
+  );
+  await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
+  const row = page.locator('tbody tr').first();
+  await expect(row).toContainText('Historical fixture engine 1.0');
+  await expect(row.locator('td').nth(4)).toHaveText('\u2014');
+  await expect(row.locator('td').nth(5)).toHaveText('\u2014');
+  await expect(page.locator('.metric-card').nth(1).locator('strong')).toHaveText('\u2014');
+});
+
+test('recovers from corrupted saved benchmark data without losing the game', async ({ page }) => {
+  await pauseAnalysis(page);
+  await page.evaluate(() => localStorage.setItem('ocl-benchmarks-v1', '{broken'));
+  await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
+  await expect(page.getByText(/Saved history is unavailable or invalid/)).toBeVisible();
+  await page.getByRole('button', { name: 'Clear saved benchmark history' }).click();
+  await page.getByRole('button', { name: 'Clear history', exact: true }).click();
+  await expect(page.getByText(/Saved history is unavailable or invalid/)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Analysis board', exact: true }).click();
+  await expect(page.locator('.move-position')).toHaveText('16 / 33');
 });
 
 test('opens usable documentation and keeps all workspace views within the viewport', async ({
@@ -345,4 +511,24 @@ test('keeps experiment and documentation views accessible and internal guides na
   await expect(page.getByRole('heading', { name: 'Code of Conduct', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Development guide', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Development Guide', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Maintenance & updates', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Maintaining OpenChessLab', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'API reference', exact: true }).click();
+  await page.getByRole('button', { name: 'migration notes', exact: true }).click();
+  await page.getByRole('button', { name: 'verification report', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Verification Report: 0.2.0', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.prose table')).toHaveCount(2);
+  const tables = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  expect(
+    tables.violations.map((violation) => ({
+      id: violation.id,
+      targets: violation.nodes.map((node) => node.target),
+    })),
+  ).toEqual([]);
 });

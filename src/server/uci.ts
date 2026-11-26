@@ -15,56 +15,71 @@ interface Waiter {
   reject: (error: Error) => void;
 }
 
-export function parseInfo(line: string, turn: 'w' | 'b'): Omit<EngineLine, 'san'> | undefined {
-  if (!line.startsWith('info ') || line.startsWith('info string ')) return;
+type UciInfo = Partial<Omit<EngineLine, 'san'>> & { multiPv: number };
+
+export function parseInfo(line: string, turn: 'w' | 'b'): UciInfo | undefined {
   const tokens = line.trim().split(/\s+/);
-  const number = (name: string, fallback = 0): number => {
+  if (tokens[0] !== 'info') return;
+  const textStart = tokens.indexOf('string');
+  if (textStart >= 0) tokens.length = textStart;
+  const number = (name: string, maximum = Number.MAX_SAFE_INTEGER): number | undefined => {
     const index = tokens.indexOf(name);
-    if (index < 0) return fallback;
-    const value = Number(tokens[index + 1]);
-    return Number.isSafeInteger(value) ? value : fallback;
+    if (index < 0) return;
+    const raw = tokens[index + 1];
+    if (!raw || !/^\d+$/.test(raw)) return;
+    const value = Number(raw);
+    return Number.isSafeInteger(value) && value >= 0 && value <= maximum ? value : undefined;
   };
+  const multiPv = number('multipv', 1024);
+  if (tokens.includes('multipv') && (multiPv === undefined || multiPv < 1)) return;
+  const info: UciInfo = { multiPv: multiPv ?? 1 };
+  for (const [field, keyword, maximum] of [
+    ['depth', 'depth', 1024],
+    ['seldepth', 'seldepth', 4096],
+    ['nodes', 'nodes', Number.MAX_SAFE_INTEGER],
+    ['nps', 'nps', Number.MAX_SAFE_INTEGER],
+    ['timeMs', 'time', Number.MAX_SAFE_INTEGER],
+    ['hashfull', 'hashfull', 1000],
+  ] as const) {
+    const value = number(keyword, maximum);
+    if (value !== undefined) info[field] = value;
+  }
   const index = tokens.indexOf('score');
   const type = tokens[index + 1];
-  const rawScore = Number(tokens[index + 2]);
+  const scoreText = tokens[index + 2] ?? '';
+  const rawScore = Number(scoreText);
   const pvIndex = tokens.indexOf('pv');
   if (
-    index < 0 ||
-    !['cp', 'mate'].includes(type ?? '') ||
-    !Number.isSafeInteger(rawScore) ||
-    Math.abs(rawScore) > 100_000 ||
-    pvIndex < 0
-  )
-    return;
-  const value = rawScore * (turn === 'w' ? 1 : -1);
-  const score: Score =
-    type === 'cp'
-      ? { type: 'cp', value }
-      : {
-          type: 'mate',
-          value,
-          winner: rawScore > 0 ? turn : turn === 'w' ? 'b' : 'w',
-        };
+    index >= 0 &&
+    /^[+-]?\d+$/.test(scoreText) &&
+    ['cp', 'mate'].includes(type ?? '') &&
+    Number.isSafeInteger(rawScore) &&
+    Math.abs(rawScore) <= 100_000
+  ) {
+    const value = rawScore === 0 ? 0 : rawScore * (turn === 'w' ? 1 : -1);
+    info.score =
+      type === 'cp'
+        ? { type: 'cp', value }
+        : {
+            type: 'mate',
+            value,
+            winner: rawScore > 0 ? turn : turn === 'w' ? 'b' : 'w',
+          };
+  }
   const rawBound = tokens.includes('lowerbound')
     ? 'lower'
     : tokens.includes('upperbound')
       ? 'upper'
       : undefined;
-  const bound = turn === 'b' && rawBound ? (rawBound === 'lower' ? 'upper' : 'lower') : rawBound;
-  return {
-    depth: Math.max(0, number('depth')),
-    seldepth: Math.max(0, number('seldepth')),
-    multiPv: Math.max(1, number('multipv', 1)),
-    score,
-    nodes: Math.max(0, number('nodes')),
-    nps: Math.max(0, number('nps')),
-    timeMs: Math.max(0, number('time')),
-    hashfull: Math.max(0, Math.min(1000, number('hashfull'))),
-    pv: tokens
-      .slice(pvIndex + 1, pvIndex + 65)
-      .filter((move) => /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move)),
-    ...(bound ? { bound } : {}),
-  };
+  if (rawBound) info.bound = turn === 'b' ? (rawBound === 'lower' ? 'upper' : 'lower') : rawBound;
+  if (pvIndex >= 0) {
+    info.pv = [];
+    for (const move of tokens.slice(pvIndex + 1, pvIndex + 65)) {
+      if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move)) break;
+      info.pv.push(move);
+    }
+  }
+  return Object.keys(info).length > 1 ? info : undefined;
 }
 
 export class UciEngine {
@@ -240,7 +255,7 @@ export class UciEngine {
     const base = {
       engineId: this.config.id,
       engineName: this.runtimeName,
-      fen,
+      fen: chess.fen(),
       settings,
       effectiveOptions: { ...this.effectiveOptions },
       warnings: [...this.warnings],
@@ -275,15 +290,51 @@ export class UciEngine {
     await this.waitFor((line) => line === 'readyok', 'isready', 5_000, signal);
     this.send(`position fen ${chess.fen()}`);
     const variations = new Map<number, EngineLine>();
+    const statistics: Pick<EngineLine, 'nodes' | 'nps' | 'timeMs' | 'hashfull'> = {
+      nodes: null,
+      nps: null,
+      timeMs: null,
+      hashfull: null,
+    };
+    let depth: number | null = null;
+    let seldepth: number | null = null;
+    const singlePv = (this.effectiveOptions.MultiPV ?? 1) === 1;
+    const snapshot = () =>
+      [...variations.values()]
+        .sort((a, b) => a.multiPv - b.multiPv)
+        .map((variation) => ({ ...variation, ...statistics }));
     let lastUpdate = 0;
     const infoListener = (line: string) => {
       const parsed = parseInfo(line, chess.turn());
-      if (!parsed || parsed.bound || parsed.multiPv > (this.effectiveOptions.MultiPV ?? 1)) return;
-      const san = pvToSan(fen, parsed.pv);
-      if (!san.length) return;
-      variations.set(parsed.multiPv, { ...parsed, pv: parsed.pv.slice(0, san.length), san });
-      if (performance.now() - lastUpdate >= 100) {
-        onProgress?.([...variations.values()].sort((a, b) => a.multiPv - b.multiPv));
+      if (!parsed) return;
+      // A PV's own depth must not become an inferred measurement for another PV.
+      if (singlePv && parsed.multiPv === 1 && !parsed.score && !parsed.pv) {
+        if (parsed.depth !== undefined) depth = parsed.depth;
+        if (parsed.seldepth !== undefined) seldepth = parsed.seldepth;
+      }
+      for (const key of ['nodes', 'nps', 'timeMs', 'hashfull'] as const) {
+        if (parsed[key] !== undefined) statistics[key] = parsed[key];
+      }
+      if (
+        parsed.score &&
+        parsed.pv?.length &&
+        !parsed.bound &&
+        parsed.multiPv <= (this.effectiveOptions.MultiPV ?? 1)
+      ) {
+        const san = pvToSan(fen, parsed.pv);
+        if (san.length)
+          variations.set(parsed.multiPv, {
+            depth: parsed.depth ?? (singlePv ? depth : null),
+            seldepth: parsed.seldepth ?? (singlePv ? seldepth : null),
+            multiPv: parsed.multiPv,
+            score: parsed.score,
+            ...statistics,
+            pv: parsed.pv.slice(0, san.length),
+            san,
+          });
+      }
+      if (variations.size && performance.now() - lastUpdate >= 100) {
+        onProgress?.(snapshot());
         lastUpdate = performance.now();
       }
     };
@@ -302,10 +353,15 @@ export class UciEngine {
         !pvToSan(fen, [bestMove]).length
       )
         throw new EngineError('Engine returned an invalid best move.');
-      const lines = [...variations.values()].sort((a, b) => a.multiPv - b.multiPv);
+      const lines = snapshot();
       if (!lines.length) throw new EngineError('Engine returned no scored principal variation.');
-      const completedDepth = Math.min(...lines.map((line) => line.depth));
-      const depthLimited = completedDepth < settings.depth;
+      const depths = lines.map((line) => line.depth);
+      const completedDepth = depths.every((value) => value !== null) ? Math.min(...depths) : null;
+      const depthLimited = completedDepth === null || completedDepth < settings.depth;
+      const missing = [
+        ...(completedDepth === null ? ['depth'] : []),
+        ...(['nodes', 'nps', 'timeMs'] as const).filter((key) => statistics[key] === null),
+      ];
       return {
         ...base,
         lines,
@@ -316,7 +372,12 @@ export class UciEngine {
         wallTimeMs: Math.round(performance.now() - started),
         warnings: [
           ...base.warnings,
-          ...(depthLimited ? ['Time limit reached before the requested depth.'] : []),
+          ...(depthLimited ? ['The search ended without confirming the requested depth.'] : []),
+          ...(missing.length
+            ? [
+                `Engine did not report: ${missing.join(', ')}. Missing measurements are null, not zero.`,
+              ]
+            : []),
         ],
       };
     } finally {

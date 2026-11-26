@@ -1,12 +1,12 @@
 {
   "name": "openchesslab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A local-first chess analysis and UCI engine experimentation workspace.",
   "private": true,
   "type": "module",
   "license": "MIT",
   "engines": {
-    "node": "^22.12.0 || ^24.0.0"
+    "node": "^22.12.0 || ^24.0.0 || ^26.0.0"
   },
   "scripts": {
     "dev": "concurrently -k -n api,web \"tsx watch src/server/index.ts\" \"vite\"",
@@ -21,8 +21,10 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "docs:check": "node scripts/check-docs.mjs",
+    "smoke:http": "node scripts/smoke-http.mjs",
     "capture:ui": "node scripts/capture-ui.mjs",
-    "check": "npm run lint && npm run typecheck && npm test",
+    "check": "npm run lint && npm run typecheck && npm run docs:check && npm test",
     "security": "npm audit --audit-level=high",
     "release:pack": "npm run build && node scripts/package-release.mjs"
   },
@@ -37,6 +39,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "stockfish": "19.0.1",
     "zod": "^4.6.7"
   },

@@ -6,6 +6,7 @@ export function useRemoteJob<T extends JobResult>() {
   const [job, setJob] = useState<Job<T>>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [stopped, setStopped] = useState(false);
   const current = useRef<{ controller: AbortController; id?: string } | null>(null);
   const sequence = useRef(0);
 
@@ -14,6 +15,7 @@ export function useRemoteJob<T extends JobResult>() {
     const active = current.current;
     current.current = null;
     active?.controller.abort();
+    setStopped(true);
     setBusy(false);
     if (active?.id) await api(`/jobs/${active.id}`, { method: 'DELETE' }).catch(() => undefined);
   }, []);
@@ -21,6 +23,7 @@ export function useRemoteJob<T extends JobResult>() {
   const run = useCallback(async (path: string, payload: unknown): Promise<T | undefined> => {
     const previous = current.current;
     const runSequence = ++sequence.current;
+    setStopped(false);
     current.current = null;
     previous?.controller.abort();
     if (previous?.id)
@@ -70,5 +73,5 @@ export function useRemoteJob<T extends JobResult>() {
     [],
   );
 
-  return { job, busy, error, run, cancel };
+  return { job, busy, error, stopped, run, cancel };
 }

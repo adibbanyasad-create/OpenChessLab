@@ -2257,6 +2257,50 @@ kbd {
   width: 100%;
   overflow: auto;
 }
+.result-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  color: #586c49;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.table-actions {
+  flex-wrap: wrap;
+}
+.storage-notice {
+  margin: 0 0 14px;
+}
+.prose .docs-table {
+  margin: 18px 0;
+}
+.prose .docs-table table {
+  white-space: normal;
+  min-width: 420px;
+}
+.prose .docs-table th,
+.prose .docs-table td {
+  vertical-align: top;
+}
+.throughput-row > div:first-child {
+  min-width: 0;
+}
+.throughput-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.button.danger {
+  color: #8c2d2a;
+  border: 1px solid #d9b8b5;
+  background: #fff2ef;
+}
+.button.danger:hover {
+  background: #fbe5df;
+}
 .table-scroll:focus-visible,
 .prose pre:focus-visible {
   outline: 2px solid #498c64;

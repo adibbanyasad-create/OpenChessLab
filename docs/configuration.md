@@ -38,7 +38,7 @@ Use `engines.example.json` as a starting point:
 
 Only an administrator with server filesystem access can edit this file. Browser requests select an ID; they never supply commands, paths, arguments, or raw UCI. Command paths must be absolute. On Windows, JSON backslashes must be escaped. An engine ID is a lowercase alphanumeric/hyphen string, at most 64 characters; IDs must be unique and cannot replace built-in IDs.
 
-The registry allows at most eight additional engines. The executable must understand `uci`, `isready`, `ucinewgame`, `position fen`, `go depth ... movetime ...`, and `quit`, and return standard scored principal variations plus a legal `bestmove`. An engine omitting `Threads`, `Hash`, or `MultiPV` receives no corresponding setoption command, and the result records the missing option. Reported numeric ranges are respected rather than silently clamped.
+The registry allows at most eight additional engines. The executable must understand `uci`, `isready`, `ucinewgame`, `position fen`, `go depth ... movetime ...`, and `quit`, and return standard scored principal variations plus a legal `bestmove`. Optional statistics can arrive in separate `info` messages and are null when unreported. Numeric fields must be valid, bounded decimal integers. An engine omitting `Threads`, `Hash`, or `MultiPV` receives no corresponding setoption command, and the result records the missing option. Reported numeric ranges are respected rather than silently clamped.
 
 ```bash
 ENGINES_CONFIG=/absolute/path/to/engines.local.json npm start
@@ -57,6 +57,8 @@ Engines are trusted local programs. A UCI subprocess is not sandboxed: it runs w
 - Two analysis/review jobs at once; benchmark jobs require exclusive use and execute engines and positions sequentially. Busy requests return 409 or 429 instead of accumulating an unbounded queue.
 - At most 8 positions and 4 distinct engines per benchmark request.
 - PGN: 256,000 UTF-8 bytes; 400 half-moves imported; 200 half-moves reviewed.
+- FEN half-move/full-move counters: integers no greater than 1,000,000. Valid extra printable spacing is canonicalized before searching.
+- Browser benchmark history: at most 20 runs and 1 MB, structurally validated before use. No server-side persistent database is implied.
 - At most 100 finished/running job records; finished records are pruned lazily after 30 minutes and older finished jobs can be evicted earlier at capacity.
 - Request body: 300,000 bytes; default request rate: 300/minute per connecting IP; costly job routes: 30/minute per route and IP.
 

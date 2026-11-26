@@ -9,19 +9,21 @@ An engine experiment should produce evidence you can inspect. OpenChessLab recor
 3. Set the same requested depth, threads, and hash for all engines. MultiPV is fixed at one.
 4. Start the run. Other application jobs must finish first; the engine manager admits the benchmark exclusively.
 5. Inspect completed depth and warnings before comparing rows.
-6. Download CSV or JSON. UI records are session-only; the server store is temporary.
+6. Download CSV or JSON for permanent records. The UI keeps up to 20 validated runs in this browser when storage is available; the server store remains temporary.
 
 The default suite contains the initial position, the Opera Game after 8...c6, and a rook endgame. These are transparent illustrative positions, **not a statistically validated strength or regression suite**. The API accepts your own named positions, up to eight per request.
 
 ## What Is Measured
 
-`nodes` is the engine's cumulative reported searched nodes. `nps` is its reported nodes per second, not a server-derived estimate. Engines can count nodes differently, so NPS does not imply equal work or playing strength across implementations.
+`nodes` is the engine's cumulative reported searched nodes. `nps` is its reported nodes per second, not a server-derived estimate. If an engine omits a measurement or reports an invalid value, it is null in JSON, blank in CSV, and unavailable in the UI. Explicitly reported zero is different from missing. Engines can count nodes differently, so NPS does not imply equal work or playing strength across implementations.
 
 `engineTimeMs` is the engine's UCI time field. `wallTimeMs` is measured by the server from search preparation through bestmove. It includes `ucinewgame`, synchronization, transport, and PV handling; it excludes initial process startup, UCI handshake, neural-network loading, and initial option configuration.
 
 The dashboard's peak throughput is the maximum reported NPS among completed rows. Total search time is the sum of measured search wall times. These are descriptive statistics of that run, not universal performance claims.
 
-Each row includes requested depth, actual minimum completed depth, whether the time cap was reached, actual runtime engine name, effective UCI options, and warnings. Environment metadata includes OS, architecture, Node version, and logical CPU availability. It does not identify the CPU model, clock speed, thermal state, container limits, or every runtime flag; record those separately for publication.
+Each row includes requested depth, minimum confirmed depth (or null), whether the requested depth was not confirmed, actual runtime engine name, effective UCI options, and warnings. An early stop is not automatically attributed to a time cap. New exports record the OpenChessLab application version. Environment metadata includes OS, architecture, Node version, and logical CPU availability. It does not identify the CPU model, clock speed, thermal state, container limits, or every runtime flag; record those separately for publication.
+
+Saved rows display the engine name/version recorded during the run, not a potentially upgraded registry label. While a new experiment is running, previously completed results are explicitly labeled. The Clear history control removes browser records only, not downloaded exports or temporary server jobs. Close other OpenChessLab tabs first; the history store does not coordinate simultaneous edits across tabs.
 
 ## What Is Controlled
 

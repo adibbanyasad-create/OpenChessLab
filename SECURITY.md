@@ -2,13 +2,13 @@
 
 ## Supported Scope
 
-OpenChessLab 0.1.x is a single-user, local-first application. This source snapshot includes defensive controls and automated checks, but has not received an independent security audit. It is not a hardened public multi-tenant service.
+OpenChessLab 0.2.x is a single-user, local-first application. It includes defensive controls and automated checks, but has not received an independent security audit. It is not a hardened public multi-tenant service. See the changelog and migration notes before upgrading an API client from 0.1.
 
 ## Private Reporting
 
-After publishing the repository, its owner should enable GitHub **Private vulnerability reporting** under Settings > Code security. Report a suspected vulnerability with the repository's private security advisory workflow, not a public issue. The publishing checklist requires verifying this before announcing the project.
+For the upstream repository, use [GitHub private vulnerability reporting](https://github.com/adibbanyasad-create/OpenChessLab/security/advisories/new), not a public issue. Fork owners must configure their own private reporting channel and verify it before inviting reports.
 
-No private reporting destination, monitored email address, security team, or response SLA is claimed before the repository exists. Until a private channel is established, contact the repository owner privately without including exploit details in a public thread. Never include secrets or sensitive PGNs in public reports.
+No monitored email address, staffed security team, or response SLA is claimed. If the private reporting channel is unavailable, contact the repository owner privately without putting exploit details in a public thread. Never include secrets or sensitive PGNs in public reports.
 
 Include affected versions, the trust boundary involved, expected/actual behavior, impact, and a minimal non-sensitive description. Coordinate disclosure with the owner. Do not test against other people's instances or publish working attack automation.
 
@@ -31,13 +31,13 @@ Include affected versions, the trust boundary involved, expected/actual behavior
 - Errors without raw process paths, stderr, or server stack traces in API responses.
 - CSP, MIME-sniffing protection, no-referrer policy, and restricted browser capability policies. Framing is self-only by default. Additional trusted frame origins require explicit `FRAME_ANCESTORS` configuration; do not enable preview allowances on a standalone deployment.
 - CSV formula-prefix escaping for untrusted string cells.
-- Dependency audit workflows, dependency-update configuration, regression tests, and read-only default CI permissions.
+- Dependency audits, static CodeQL workflow configuration, scheduled regression checks, pinned action/container revisions, and read-only default CI permissions. Check Actions for actual execution outcomes; configuration alone is not evidence of a successful scan.
 
 ## Privacy
 
 There are no analytics integrations, external font requests, cloud analysis calls, or remote PGN uploads outside the application's own server. A remote deployment receives its clients' games and positions; the word local does not mean that a remote preview executes on the user's laptop.
 
-The active game is stored in browser local storage, tokens in tab-scoped session storage, and engine jobs in server memory. These stores are not encrypted at rest. Clearing browser site data removes saved PGN/token state. Restarting the server removes job results; completed results also expire or are evicted under bounded retention.
+The active game and up to 20 benchmark records are stored in browser local storage; tokens use tab-scoped session storage, with an in-memory fallback if storage is blocked. Records include FENs and engine/runtime metadata. These stores are not encrypted at rest. Clear history removes saved benchmark records only. Close other OpenChessLab tabs first; in-memory views are not synchronized. To remove all local state, clear the site's browser data and reload. Downloaded exports must be handled separately. Restarting the server removes job results; completed results also expire or are evicted under bounded retention.
 
 Server access logs include method, route, request ID, and connection metadata. Application code does not log request bodies or bearer tokens, but operators must audit reverse-proxy logging separately.
 

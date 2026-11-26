@@ -1,94 +1,66 @@
-# Verification Report
+# Verification Report: 0.2.0
 
-Version: **0.1.0 source snapshot**. Verification date: **2026-11-25**.
+Verification date: **2026-11-25**. This report records the 0.2 maintenance candidate's observed checks, not a claim of production deployment or independent certification. The [0.1 report](verification-0.1.0.md) is retained as a historical snapshot.
 
-This report distinguishes checks actually executed in the development workspace from configured automation and unverified deployment targets. It is not an independent audit, security certification, chess-strength evaluation, or evidence of public adoption.
+## Executed Locally
 
-## Environment
+| Check                                       | Observed result                                                                                                                          |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Formatting, linting, and strict type checks | Passed                                                                                                                                   |
+| Local documentation link/image file targets | Passed; external URLs and heading anchors are not validated                                                                              |
+| Unit/integration suite on Node 22.23.1      | 172 passed in 9 files                                                                                                                    |
+| Same suite on Node 24.22.3                  | 172 passed in 9 files                                                                                                                    |
+| Same suite on Node 26.13.1                  | 172 passed in 9 files                                                                                                                    |
+| Chromium browser suite                      | 40 passed, 20 desktop and 20 mobile-profile tests                                                                                        |
+| Responsive layout checks                    | Passed at 320, 768, 1024, and 1440 CSS pixels, plus the mobile profile                                                                   |
+| Automated accessibility checks              | No violations in the tested analysis, import, history confirmation, experiment, and documentation states, including collapsed navigation |
+| Production build                            | Passed, with secondary views and their validation code lazy-loaded                                                                       |
+| Dependency audit                            | Zero known vulnerabilities reported by npm audit at the time of the check                                                                |
+| Workflow syntax/configuration lint          | All four workflow files passed actionlint 1.7.12                                                                                         |
+| Native UCI interoperability                 | Six real searches completed using the full and Lite Stockfish 19 WASM builds and native Ethereal 12.00                                   |
 
-- Linux x64, Debian 12 userspace, with two logical CPUs available to the process.
-- Node.js 22.23.1 and a separately provisioned Node.js 24.22.3 runtime.
-- npm 10.9.8; versions of project dependencies are recorded in `package-lock.json`.
-- Playwright 1.65.1 and its installed Chromium browser; desktop and Pixel 7 device-emulation profiles.
-- Root privileges were unavailable. Chromium and its missing Debian shared libraries were provisioned under an ignored workspace cache; browser checks were run with explicit `PLAYWRIGHT_BROWSERS_PATH` and `LD_LIBRARY_PATH`.
+The native interoperability run used two real positions per engine, requested depth 8, two threads, and 32 MB of hash. It checked legal completed output, reported counters, actual options, and application-version metadata. The separately provisioned Ethereal binary is not part of the source or release archive. Incidental timings from this run are not a benchmark ranking.
 
-## Executed Checks
+Core browser tests use the production build and real HTTP/engine jobs. A cancellation test delays a real creation response to exercise cleanup. Storage-edge tests use explicitly labeled fixture records, not fabricated application demo data. Desktop and mobile profiles use independent production servers so they do not consume each other's rate-limit budgets; rate limiting remains enabled.
 
-| Check                                         | Observed result                                                                                                     |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| ESLint and React hook rules                   | Passed; warnings are errors                                                                                         |
-| Strict TypeScript client/shared/server checks | Passed                                                                                                              |
-| Unit and integration suite, Node 22.23.1      | **122 passed in 7 files**                                                                                           |
-| Same unit and integration suite, Node 24.22.3 | **122 passed in 7 files**                                                                                           |
-| Chromium browser workflows                    | **30 passed**, 15 desktop and 15 mobile                                                                             |
-| Responsive overflow checks                    | Passed at 320, 768, 1024, and 1440 CSS pixels, plus the mobile device profile                                       |
-| Automated axe checks                          | Zero violations in tested analysis, import, experiment, and documentation states; collapsed navigation also checked |
-| Production build                              | Passed; real static frontend and API served together                                                                |
-| Dependency audit                              | **0 known vulnerabilities** reported by npm audit at verification time                                              |
-| GitHub workflow static validation             | `actionlint` 1.7.12 passed for all three workflow files                                                             |
-| Release tag/version validation                | Matching `v0.1.0` passed the local guard                                                                            |
-| README screenshots                            | Captured from real completed Stockfish searches, not mock API data                                                  |
+The local HTTP smoke check also passed against the running 0.2 application, including static assets and a real multithreaded Stockfish search. This is not a claim that the Docker image has run in this workspace.
 
-The suite exercises real Stockfish processes. Test-only protocol fixtures deliberately simulate errors and are never displayed as engine benchmarks. Browser workflows use the production build and real HTTP API, not stubbed engine responses.
+The generated 0.2 archive passed its SHA-256 integrity check, a clean production-only dependency installation in a separate directory, and the packaged application's smoke test. The smoke test loaded that archive's own dependencies, served its compiled frontend bundle, and completed a real Stockfish depth-4 search.
 
-Automated accessibility checks cover WCAG 2 A/AA and 2.1 AA rules supported by axe in the tested states. Passing these checks is not a claim of complete WCAG compliance or real-device/assistive-technology certification.
+The 0.2 archive was generated, its SHA-256 checksum checked, and its contents extracted into a separate directory. A clean `npm ci --omit=dev --ignore-scripts` installation and `node scripts/smoke-release.mjs .` passed there, including the compiled frontend bundle and a real Stockfish depth-4 search. This check used the archive's own production dependencies, not the development checkout's dependencies.
 
-## Release Archive
+## Coverage Scope
 
-The release archive was also extracted into a separate directory and installed with `npm ci --omit=dev --ignore-scripts`. Its own production dependencies resolved locally, the compiled frontend and module asset returned successfully, and `node scripts/smoke-release.mjs .` completed a real Stockfish depth-4 search. The archive's SHA-256 checksum was checked independently. Source, tests, workflows, the lockfile, documentation, build artifacts, and license notices were inspected in the archive; dependency directories, private configuration, caches, and Git metadata were not included.
+The V8 snapshot covers server and shared code, excluding the server process bootstrap. It does not claim UI statement coverage.
 
-## Measured Coverage
+| Metric     | Observed coverage |
+| ---------- | ----------------- |
+| Statements | 95.37%            |
+| Branches   | 87.24%            |
+| Functions  | 97.29%            |
+| Lines      | 96.91%            |
 
-`npm run test:coverage` produced the following V8 coverage snapshot for **server and shared code**, excluding the server entry-point process bootstrap:
+The gates remain 90% statements, 80% branches, 90% functions, and 90% lines. Client persistence/authentication helpers also have unit tests, and browser behavior is exercised end to end, but those are not silently included in the percentages above.
 
-| Metric     | Coverage |
-| ---------- | -------- |
-| Statements | 94.43%   |
-| Branches   | 84.51%   |
-| Functions  | 95.37%   |
-| Lines      | 96.24%   |
+## Verified Changes
 
-The configured coverage gates are 90% statements, 80% branches, 90% functions, and 90% lines. React UI code is exercised by browser tests but is not included in these coverage percentages. These numbers do not imply that every OS, engine, or failure timing has been covered.
+- Missing or invalid optional measurements remain null, distinct from explicitly reported zero, through API serialization, display, and CSV/JSON exports.
+- Statistics-only UCI records are accumulated without transferring counters between positions. Text messages and malformed numeric/variation fields do not become plausible measurements.
+- Each MultiPV line keeps its own reported depth; another variation's depth is not borrowed. Unknown or lower depth is not attributed to an unproven timeout.
+- FEN spacing is canonicalized consistently; castling rights, piece counts, and bounded counters are checked before engine use.
+- Manual searches are cancelled when navigation/settings change. Late creation responses are cancelled without becoming stale UI results.
+- Benchmark history survives reload when storage is available, remains bounded, validates stored data, distinguishes storage failures, and has explicit deletion behavior.
+- Historical rows retain recorded engine identities and available app versions rather than taking current registry labels.
+- Depth entry accepts empty editing states without silently changing the requested value; invalid drafts cannot start a run.
+- Promotion/history dialogs isolate global shortcuts, and board focus is retained during keyboard moves and flips.
+- Token removal and RequestInit header representations are handled consistently; bearer validation and API-route handling remain covered by integration tests.
+- The in-app maintenance/migration guides and verification tables render correctly and remain keyboard accessible.
+- Deadline and forced-process-cleanup paths, release-tag validation, and preserved PGN state when clearing benchmark history have regression coverage.
 
-## Verified Implemented Features
+## Automation and Remaining Boundaries
 
-- Real UCI startup, `isready` synchronization, advertised option discovery, depth-bounded search, scored PV parsing, and engine termination.
-- Full and Lite Stockfish 19 WASM execution, including applied hash, threads, and MultiPV settings.
-- A separate native **Ethereal 12.00** interoperability check through the administrator registry and benchmark API: two positions, depth 8, two threads, 32 MB hash, and real scores/nodes/NPS. The external engine binary is not bundled in the source or release archive. This was a functional interoperability check, not a performance ranking.
-- White-perspective centipawn and mate normalization, including terminal mate zero with an explicit winner.
-- Single-game PGN import by paste and file upload; FEN import with invalid-position feedback; main-line navigation and branching.
-- Legal pointer moves, desktop drag-and-drop, mobile touch selection, keyboard board input, flip controls, castling, en passant, and underpromotion.
-- Real principal variations in SAN, configurable search settings, live analysis, and cancellation of running server work.
-- Game review using actual engine searches, centipawn-loss labels, terminal outcome handling, and an interactive evaluation timeline. A short mating game is checked end to end; threshold and color semantics have unit coverage.
-- Sequential comparisons, the three-position benchmark suite, session result retention, JSON and CSV downloads, and actual versus requested depth reporting.
-- PGN export, exact FEN clipboard copy, workspace restoration, corrupt-storage recovery, and token fallback when session storage is blocked.
-- Request schema, size, host/origin, optional authentication, rate, registry, concurrency, expiry, and output-limit controls.
-- Readable production error responses, executable-path exclusion from engine descriptors, and CSV formula-prefix protection.
-- Complete documentation, original MIT-licensed piece artwork, application MIT license, and third-party license inventory generation.
+Weekly regressions, dependency audits, CodeQL analysis, reviewed dependency/base-image updates, archive smoke checks, and a container HTTP/engine check are configured. They do not imply an autonomous agent watching the project between conversations, automatic code fixes, or safe automatic merging. See [maintenance](maintenance.md).
 
-## Review and Repair Loop
+At the time of the local checks recorded above, the 0.2 workflows had not yet been executed on GitHub. Docker was not available in the workspace, and CodeQL was not run locally. Consult the actual hosted Actions results before treating those checks as passed. A version tag or public release has not been manufactured.
 
-Implementation was followed by repeated source review, real-engine runs, and regression testing. Problems found and repaired included:
-
-- Production static-plugin registration freezing the wrong Fastify error handler and causing validation failures to return 500 instead of 400.
-- Equivalent default-port origins being rejected by a literal host comparison.
-- Stale client-job updates and cancellation ordering risks; position/settings keys and sequence guards now isolate displayed search state.
-- Mate-zero ambiguity, inconsistent castling rights, impossible piece counts, and formula-like CSV string prefixes.
-- Modal focus restoration, preserving board focus across successive keyboard moves, and move-list scrolling relative to the wrong offset parent.
-- A broad SVG style unintentionally enlarging the chart's action icon.
-- Low-contrast supporting text, unnamed collapsed navigation, and keyboard-inaccessible horizontal result tables.
-- Default framing allowances that were wider than necessary; preview framing is now an explicit opt-in.
-- Runtime version strings drifting from package metadata; UI and API now derive the version from the package manifest.
-- Documentation links leaving the in-app guide for missing local files.
-- Release archives omitting reproducible-install metadata; the release packer now includes the lockfile and complete source using an explicit allowlist.
-
-The browser's initial JavaScript bundle was reduced from approximately 178 KB to approximately 100 KB gzipped by lazy-loading secondary views and keeping server validation code out of the browser bundle. Those are measured build sizes, not network-latency or engine-speed claims.
-
-## Not Yet Verified
-
-- Actual execution of GitHub-hosted Actions, public repository creation, uploaded releases, branch protection, and private security reporting. The available GitHub CLI was not authenticated.
-- Docker image execution, macOS/Windows runtime behavior, Firefox, Safari/WebKit, and real mobile hardware.
-- Manual screen-reader certification, independent penetration testing, or a formal security audit.
-- Public multi-user operation, durable server storage, engine strength/Elo measurement, tablebase integration, and tournament scheduling. These are not implemented features.
-
-The live workspace preview is a private verification convenience, not a claimed production deployment. The standalone server remains loopback-first and self-framing-only by default. See [security](../SECURITY.md), [benchmark methodology](benchmarking.md), and [publication instructions](publishing.md).
+Browser tests use Chromium and a mobile emulation profile, not real Android/iOS hardware. Firefox, Safari/WebKit, macOS/Windows runtime behavior, manual screen-reader certification, public multi-user hosting, and an independent security audit remain outside this verification claim. The application remains local/private-first.
