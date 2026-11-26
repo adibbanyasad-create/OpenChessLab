@@ -73,19 +73,23 @@ if (![1, 2, 3, 4].includes(threads)) usage.push('--threads must be 1-4.');
 if (![16, 32, 64, 128, 256, 512].includes(hash)) usage.push('--hash must be 16-512 MB.');
 // Constrain --output before any network activity: only a bare file name is
 // accepted (no directories, no separators), joined to the working directory.
-// This structurally prevents directory escape instead of detecting it.
+// The name is rebuilt through an allowlist replace so the value reaching the
+// file sink is constructed, not passed through; the equality check fails
+// closed (any stripped character is a usage error, never a silent rename).
 let outputName = '';
 if (output) {
+  const scrubbed = output.replace(/[^A-Za-z0-9._-]/g, '');
   if (
-    output.length === 0 ||
-    output.length > 128 ||
-    !/^[A-Za-z0-9._-]+\.oclb\.json$/.test(output) ||
-    basename(output) !== output
+    scrubbed !== output ||
+    scrubbed.length === 0 ||
+    scrubbed.length > 128 ||
+    !/^[A-Za-z0-9._-]+\.oclb\.json$/.test(scrubbed) ||
+    basename(scrubbed) !== scrubbed
   )
     usage.push(
       '--output must be a bare file name (letters, digits, dot, dash, underscore) ending in .oclb.json; it is written to the working directory.',
     );
-  else outputName = output;
+  else outputName = scrubbed;
 }
 if (usage.length) {
   report({ exitCode: 2, lines: ['Usage errors:'], failures: usage });
