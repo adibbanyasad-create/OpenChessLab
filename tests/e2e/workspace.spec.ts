@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import type { BenchmarkResult, Job } from '../../src/shared/types';
+import { verifyBundle, type ExperimentBundle } from '../../src/shared/bundles';
+import { SUITE_V1 } from '../../src/shared/suites';
 
 async function pauseAnalysis(page: Page) {
   await page.getByRole('checkbox', { name: 'Live analysis' }).uncheck();
@@ -252,6 +254,34 @@ test('compares two real engines and exports measured JSON and CSV', async ({ pag
   const csvPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV' }).click();
   expect((await csvPromise).suggestedFilename()).toMatch(/\.csv$/);
+});
+
+test('runs Suite v1 and downloads a verifiable experiment bundle', async ({ page }) => {
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
+  await page.getByLabel('Position suite').selectOption('standard');
+  await expect(page.getByText(`Hash ${SUITE_V1.sha256.slice(0, 12)}…`)).toBeVisible();
+  await page.locator('.engine-option').nth(1).click();
+  await page.getByRole('spinbutton', { name: 'Benchmark depth' }).fill('4');
+  await page.getByRole('button', { name: /Run benchmark/ }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(3);
+  await expect(page.locator('.result-context')).toContainText(
+    `Suite ${SUITE_V1.id} v${SUITE_V1.version}`,
+  );
+  const bundlePromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Bundle', exact: true }).click();
+  const download = await bundlePromise;
+  expect(download.suggestedFilename()).toMatch(/\.oclb\.json$/);
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk as Uint8Array));
+  const bundle = JSON.parse(Buffer.concat(chunks).toString('utf8')) as ExperimentBundle;
+  const verified = verifyBundle(bundle);
+  expect(verified.ok).toBe(true);
+  if (verified.ok) {
+    expect(verified.bundle.suite?.sha256).toBe(SUITE_V1.sha256);
+    expect(verified.bundle.result.rows).toHaveLength(3);
+  }
 });
 
 test('runs a real benchmark on a custom FEN entered in the interface', async ({ page }) => {
@@ -571,11 +601,20 @@ test('keeps experiment and documentation views accessible and internal guides na
     page.getByRole('heading', { name: 'Maintaining OpenChessLab', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'API reference', exact: true }).click();
+  await page.getByRole('button', { name: 'Reproducible experiments', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Reproducible Experiments', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'UCI pitfalls for engine authors', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'UCI Pitfalls for Engine Authors', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'API reference', exact: true }).click();
   await page.getByRole('button', { name: 'migration notes', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Migrating to 0.2', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'verification report', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Verification Report: 0.4.0', exact: true }),
+    page.getByRole('heading', { name: 'Verification Report: 0.5.0', exact: true }),
   ).toBeVisible();
   await expect(page.locator('.prose table')).toHaveCount(2);
   const tables = await new AxeBuilder({ page })
