@@ -45,11 +45,12 @@ Open **http://localhost:5173**. Vite proxies `/api` to the local engine service.
 - **Review a game:** analyze consecutive positions, visualize an evaluation timeline, and flag estimated inaccuracies, mistakes, and blunders. Labels are heuristics, not an accuracy rating. Incomplete searches are marked uncertain with null losses, and reviews export to CSV/JSON.
 - **Compare engines:** the same position, settings, and protocol, with both bundled engines or your own server-configured UCI executable. Centipawn-only agreement summaries show evaluation spreads without averaging mates into numeric scores.
 - **Benchmark honestly:** sequential searches, per-position UCI state resets, environment metadata, measured search wall time, engine-reported nodes and NPS, custom FEN positions, and JSON/CSV exports. No scores appear until an experiment completes.
+- **Prove it with bundles:** frozen Suite v1 positions with content hashes, tamper-evident `.oclb.json` experiment bundles, a standalone verifier, and a headless regression CLI with a copy-paste CI workflow for engine repos. See [reproducibility](docs/reproducibility.md).
 - **Keep your work:** restore the active game and up to 20 validated benchmark records from browser storage. Historical rows retain the engine name/version actually reported during the run. Export PGN, FEN, JSON, and CSV; clear benchmark history independently of your game.
 
 The [verification report](docs/verification.md) records observed checks and their scope, with earlier reports preserved separately. Current hosted checks are available in the repository's [Actions tab](https://github.com/adibbanyasad-create/OpenChessLab/actions). A passing workflow is not evidence of a production deployment.
 
-Upgrading an API client? Read the [0.4 migration notes](docs/migration-0.4.md) and earlier migration guides: review labels/summaries are expanded, engine options are additive, and uncertain data remains explicit.
+Upgrading an API client? Read the [0.5 migration notes](docs/migration-0.5.md) and earlier migration guides: suite references and bundle exports are additive, and uncertain data remains explicit.
 
 ## A Deliberately Small Architecture
 

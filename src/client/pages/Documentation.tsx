@@ -18,6 +18,8 @@ import configuration from '../../../docs/configuration.md?raw';
 import architecture from '../../../docs/architecture.md?raw';
 import api from '../../../docs/api.md?raw';
 import benchmarking from '../../../docs/benchmarking.md?raw';
+import reproducibility from '../../../docs/reproducibility.md?raw';
+import uciPitfalls from '../../../docs/uci-pitfalls.md?raw';
 import contributing from '../../../CONTRIBUTING.md?raw';
 import security from '../../../SECURITY.md?raw';
 import development from '../../../docs/development.md?raw';
@@ -25,6 +27,7 @@ import publishing from '../../../docs/publishing.md?raw';
 import roadmap from '../../../docs/roadmap.md?raw';
 import maintenance from '../../../docs/maintenance.md?raw';
 import migration from '../../../docs/migration-0.2.md?raw';
+import migration05 from '../../../docs/migration-0.5.md?raw';
 import migration04 from '../../../docs/migration-0.4.md?raw';
 import migration03 from '../../../docs/migration-0.3.md?raw';
 import agents from '../../../AGENTS.md?raw';
@@ -32,6 +35,7 @@ import verification from '../../../docs/verification.md?raw';
 import previousVerification from '../../../docs/verification-0.1.0.md?raw';
 import verification02 from '../../../docs/verification-0.2.0.md?raw';
 import verification03 from '../../../docs/verification-0.3.0.md?raw';
+import verification04 from '../../../docs/verification-0.4.0.md?raw';
 import conduct from '../../../CODE_OF_CONDUCT.md?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.md?raw';
 import license from '../../../LICENSE?raw';
@@ -42,6 +46,13 @@ const documents = [
   { id: 'usage', title: 'Your analysis workspace', icon: Flag, text: usage },
   { id: 'configuration', title: 'Configuration & engines', icon: Settings2, text: configuration },
   { id: 'benchmarking', title: 'Benchmarking guide', icon: GitBranch, text: benchmarking },
+  {
+    id: 'reproducibility',
+    title: 'Reproducible experiments',
+    icon: GitBranch,
+    text: reproducibility,
+  },
+  { id: 'uci-pitfalls', title: 'UCI pitfalls for engine authors', icon: Code2, text: uciPitfalls },
   { id: 'architecture', title: 'Under the hood', icon: Code2, text: architecture },
   { id: 'api', title: 'API reference', icon: FileCode2, text: api },
   { id: 'contributing', title: 'Contribute to the project', icon: GitBranch, text: contributing },
@@ -50,6 +61,13 @@ const documents = [
   { id: 'maintenance', title: 'Maintenance & updates', icon: Settings2, text: maintenance },
   { id: 'publishing', title: 'Publish & release', icon: GitBranch, text: publishing },
   { id: 'roadmap', title: 'Future directions', icon: Flag, text: roadmap },
+  {
+    id: 'migration-0.5',
+    title: 'Migrating to 0.5',
+    icon: FileCode2,
+    text: migration05,
+    secondary: true,
+  },
   {
     id: 'migration-0.4',
     title: 'Migrating to 0.4',
@@ -77,6 +95,13 @@ const documents = [
     title: 'Verification report',
     icon: FileCode2,
     text: verification,
+    secondary: true,
+  },
+  {
+    id: 'verification-0.4.0',
+    title: '0.4 verification',
+    icon: FileCode2,
+    text: verification04,
     secondary: true,
   },
   {

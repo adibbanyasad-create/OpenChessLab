@@ -8,6 +8,7 @@ import {
   scoreDisagreementCp,
 } from '../shared/chess.js';
 import { openingFromMoves } from '../shared/openings.js';
+import { identifySuite } from '../shared/suites.js';
 import type { AnalysisRequest, BenchmarkRequest, ReviewRequest } from '../shared/schemas.js';
 import type { BenchmarkResult, GameData, JobProgress, ReviewResult } from '../shared/types.js';
 import type { EngineConfig } from './config.js';
@@ -156,12 +157,14 @@ export async function runBenchmark(
   id: string,
 ): Promise<BenchmarkResult> {
   const { depth, threads, hash, multiPv } = request;
+  const suite = identifySuite(request.positions);
   const result: BenchmarkResult = {
     id,
     appVersion: APP_VERSION,
     createdAt: new Date().toISOString(),
     settings: { depth, threads, hash, multiPv },
     rows: [],
+    ...(suite ? { suite: { id: suite.id, version: suite.version, sha256: suite.sha256 } } : {}),
     environment: {
       platform: platform(),
       arch: arch(),

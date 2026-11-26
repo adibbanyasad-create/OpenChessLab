@@ -2,7 +2,7 @@
 
 ## Supported Scope
 
-OpenChessLab 0.4.x is a single-user, local-first application. It includes defensive controls and automated checks, but has not received an independent security audit. It is not a hardened public multi-tenant service. See the changelog and migration notes before upgrading an API client from an earlier version.
+OpenChessLab 0.5.x is a single-user, local-first application. It includes defensive controls and automated checks, but has not received an independent security audit. It is not a hardened public multi-tenant service. See the changelog and migration notes before upgrading an API client from an earlier version.
 
 ## Private Reporting
 

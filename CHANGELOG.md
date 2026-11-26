@@ -2,6 +2,21 @@
 
 Meaningful changes are recorded here. Source publication and a tagged GitHub release are separate events; no release or deployment is implied by a version heading alone.
 
+## 0.5.0 - Unreleased
+
+### Added
+
+- Frozen benchmark Suite v1 (`openchesslab-suite-v1`): three append-only positions with a SHA-256 content hash, recorded on exact-suite runs only.
+- Tamper-evident experiment bundles (`.oclb.json`): suite, engines, settings, environment, measured rows, and notes under one canonical checksum.
+- Bundle export in the UI and via `GET /api/jobs/:id/export?format=bundle` for completed benchmarks, plus suite provenance in results.
+- Standalone dependency-free bundle verifier (`node scripts/verify-bundle.mjs`, with `--json` mode) and headless regression CLI (`node scripts/regress.mjs`) with honest exit codes and no strength claims.
+- Copy-paste GitHub Actions workflow for engine repos (`examples/engine-regression.yml`) with pinned actions and candidate-bundle upload.
+- Reproducibility guide, UCI pitfalls guide for engine authors, and 0.5 migration notes, all linked from the in-app documentation.
+
+### Compatibility
+
+`BenchmarkResult` may include an optional `suite` reference. Export adds `format=bundle` for benchmarks (reviews reject it with 409). These additions are backward compatible for consumers that tolerate optional fields. See [migration notes](docs/migration-0.5.md).
+
 ## 0.4.0 - Unreleased
 
 ### Added

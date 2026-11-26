@@ -8,6 +8,8 @@ import { analysisSchema, benchmarkSchema, pgnSchema, reviewSchema } from '../sha
 import { LIMITS } from '../shared/limits.js';
 import { parseGame, validPosition } from '../shared/chess.js';
 import { benchmarkCsv, reviewCsv } from '../shared/csv.js';
+import { createBundle } from '../shared/bundles.js';
+import { BENCHMARK_SUITES } from '../shared/suites.js';
 import type { BenchmarkResult, ReviewResult } from '../shared/types.js';
 import { loadConfig, loadEngines, type EngineConfig, type ServerConfig } from './config.js';
 import { AppError } from './errors.js';
@@ -259,7 +261,7 @@ export async function createApp(
   app.delete('/api/jobs/:id', async (request) => jobs.cancel(jobId(request.params)));
   app.get('/api/jobs/:id/export', async (request, reply) => {
     const { format } = z
-      .object({ format: z.enum(['csv', 'json']).default('csv') })
+      .object({ format: z.enum(['csv', 'json', 'bundle']).default('csv') })
       .strict()
       .parse(request.query);
     const job = jobs.get(jobId(request.params));
@@ -267,8 +269,34 @@ export async function createApp(
       throw new AppError(409, 'Only completed jobs can be exported.');
     if (job.kind !== 'benchmark' && job.kind !== 'review')
       throw new AppError(409, 'Only completed benchmarks and reviews can be exported.');
-    reply.header('Content-Disposition', `attachment; filename="openchesslab-${job.id}.${format}"`);
+    if (format === 'bundle' && job.kind !== 'benchmark')
+      throw new AppError(409, 'Experiment bundles are available for completed benchmarks only.');
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename="openchesslab-${job.id}.${format === 'bundle' ? 'oclb.json' : format}"`,
+    );
     if (format === 'json') return reply.type('application/json').send(job.result);
+    if (format === 'bundle') {
+      const result = job.result as BenchmarkResult;
+      const suite = result.suite
+        ? (BENCHMARK_SUITES.find(
+            (candidate) =>
+              candidate.id === result.suite?.id && candidate.version === result.suite.version,
+          ) ?? null)
+        : null;
+      return reply.type('application/json').send(
+        createBundle(result, {
+          suite: suite
+            ? {
+                id: suite.id,
+                version: suite.version,
+                sha256: suite.sha256,
+                positions: suite.positions,
+              }
+            : null,
+        }),
+      );
+    }
     const csv =
       job.kind === 'benchmark'
         ? benchmarkCsv(job.result as BenchmarkResult)

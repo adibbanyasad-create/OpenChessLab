@@ -6,6 +6,8 @@ import { apiTokensMatch, createApp } from '../../src/server/app';
 import { loadConfig } from '../../src/server/config';
 import { APP_VERSION } from '../../src/server/version';
 import { BENCHMARK_POSITIONS, DEFAULT_POSITION, parseGame } from '../../src/shared/chess';
+import { SUITE_V1 } from '../../src/shared/suites';
+import { verifyBundle, type ExperimentBundle } from '../../src/shared/bundles';
 import type { AnalysisResult, BenchmarkResult, Job, ReviewResult } from '../../src/shared/types';
 
 let app: Awaited<ReturnType<typeof createApp>>;
@@ -304,6 +306,54 @@ describe('actual Stockfish jobs', () => {
     const json = await app.inject(`/api/jobs/${job.id}/export?format=json`);
     expect(json.json()).toEqual(result);
     expect(result.environment.cpus).toBeGreaterThan(0);
+    // Two of three Suite v1 positions is NOT the suite: no suite identity recorded.
+    expect(result.suite).toBeUndefined();
+  });
+  it('records Suite v1 identity for exact-suite runs and exports verifiable bundles', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/benchmarks',
+      payload: {
+        engineIds: ['stockfish-lite'],
+        positions: SUITE_V1.positions,
+        depth: 4,
+        threads: 1,
+        hash: 16,
+      },
+    });
+    expect(created.statusCode, created.body).toBe(202);
+    const job = await finish(created.json<Job>().id);
+    expect(job.status, job.error).toBe('completed');
+    const result = job.result as BenchmarkResult;
+    expect(result.rows).toHaveLength(3);
+    expect(result.suite).toEqual({
+      id: SUITE_V1.id,
+      version: SUITE_V1.version,
+      sha256: SUITE_V1.sha256,
+    });
+    const bundle = await app.inject(`/api/jobs/${job.id}/export?format=bundle`);
+    expect(bundle.statusCode).toBe(200);
+    expect(bundle.headers['content-type']).toContain('application/json');
+    expect(bundle.headers['content-disposition']).toContain('.oclb.json');
+    const verified = verifyBundle(bundle.json<ExperimentBundle>());
+    expect(verified.ok).toBe(true);
+    if (verified.ok) {
+      expect(verified.bundle.runId).toBe(job.id);
+      expect(verified.bundle.suite?.sha256).toBe(SUITE_V1.sha256);
+      expect(verified.bundle.result.rows).toHaveLength(3);
+    }
+  });
+  it('rejects bundle export for reviews', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/reviews',
+      payload: { pgn: '1. e4 e5 *', depth: 2, hash: 16 },
+    });
+    expect(created.statusCode, created.body).toBe(202);
+    const job = await finish(created.json<Job>().id);
+    expect(job.status, job.error).toBe('completed');
+    const bundle = await app.inject(`/api/jobs/${job.id}/export?format=bundle`);
+    expect(bundle.statusCode).toBe(409);
   });
   it('reviews a real short game and identifies the mating blunder', async () => {
     const created = await app.inject({

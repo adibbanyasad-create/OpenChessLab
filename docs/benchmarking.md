@@ -12,7 +12,7 @@ An engine experiment should produce evidence you can inspect. OpenChessLab recor
 6. Inspect completed depth and warnings before comparing rows.
 7. Download CSV or JSON for permanent records. The UI keeps up to 20 validated runs in this browser when storage is available; the server store remains temporary.
 
-The default suite contains the initial position, the Opera Game after 8...c6, and a rook endgame. These are transparent illustrative positions, **not a statistically validated strength or regression suite**. The API accepts your own named positions, up to eight per request. The interface currently supports one custom FEN at a time.
+The default suite is the frozen [Suite v1](reproducibility.md): the initial position, the Opera Game after 8...c6, and a rook endgame. These are transparent illustrative positions, **not a statistically validated strength suite**. Exact-suite runs record the suite id, version, and content hash; anything else is labeled a custom run. The API accepts your own named positions, up to eight per request. The interface currently supports one custom FEN at a time.
 
 ## Engine Agreement
 
@@ -54,5 +54,7 @@ The application prevents its own concurrent jobs during a benchmark, but cannot 
 ## Publish a Reproducible Result
 
 Retain the JSON export, exact engine binary/version and network, input FENs, requested/effective settings, source revision, operating system, CPU model, available cores, memory, Node runtime, warmup policy, and background-load conditions. Repeat runs with a predefined sampling policy and report time-limited searches rather than dropping inconvenient results.
+
+For a shareable record, export an [experiment bundle](reproducibility.md) (`.oclb.json`): it pins the suite, settings, environment, and measured rows under one SHA-256 checksum, and anyone can audit it with `node scripts/verify-bundle.mjs`. Engine authors can gate pull requests with `node scripts/regress.mjs`; see the [example workflow](../examples/engine-regression.yml).
 
 Do not compare the screenshots or verification suite's incidental timings as a hardware benchmark. Their purpose is to check the application, not rank engines.

@@ -5,7 +5,7 @@ These are **unimplemented ideas**, not advertised capabilities or promises of a 
 - Persistent variation trees, editable comments, and multi-game PGN collections.
 - Repetition-aware UCI position histories and more explicit draw-claim semantics.
 - Durable server-side experiment storage and multi-tab synchronization. Bounded browser-local history and one custom FEN per interface run are already implemented; multi-position custom suites remain API-only.
-- Repeated-run sampling with confidence intervals for benchmark comparisons. Single-run centipawn spreads and explicit uncertainty are already implemented.
+- Repeated-run sampling with confidence intervals for benchmark comparisons. Single-run centipawn spreads, frozen Suite v1, verifiable bundles, and a headless regression CLI are already implemented.
 - Optional tablebase lookup with clear licensing and network/privacy controls.
 - Richer comparative statistics, repeated-run sampling, and confidence intervals.
 - Match scheduling and properly designed strength-testing workflows.
