@@ -68,8 +68,9 @@ export interface ReviewAnnotation {
   ply: number;
   san: string;
   classification: Classification;
-  lossCp: number;
+  lossCp: number | null;
   bestMove: string | null;
+  uncertain: boolean;
 }
 
 export interface ReviewResult {
@@ -78,6 +79,13 @@ export interface ReviewResult {
   scores: { ply: number; score: Score; depth: number | null; depthLimited: boolean }[];
   annotations: ReviewAnnotation[];
   elapsedMs: number;
+}
+
+export interface BenchmarkComparison {
+  meanCp: number | null;
+  disagreementCp: number | null;
+  mateCount: number;
+  missingScoreCount: number;
 }
 
 export interface BenchmarkRow {
@@ -104,6 +112,7 @@ export interface BenchmarkResult {
   createdAt: string;
   settings: SearchSettings;
   rows: BenchmarkRow[];
+  comparisons?: Record<string, BenchmarkComparison>;
   environment: { platform: string; arch: string; cpus: number; node: string };
 }
 

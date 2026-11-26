@@ -25,9 +25,11 @@ import publishing from '../../../docs/publishing.md?raw';
 import roadmap from '../../../docs/roadmap.md?raw';
 import maintenance from '../../../docs/maintenance.md?raw';
 import migration from '../../../docs/migration-0.2.md?raw';
+import migration03 from '../../../docs/migration-0.3.md?raw';
 import agents from '../../../AGENTS.md?raw';
 import verification from '../../../docs/verification.md?raw';
 import previousVerification from '../../../docs/verification-0.1.0.md?raw';
+import verification02 from '../../../docs/verification-0.2.0.md?raw';
 import conduct from '../../../CODE_OF_CONDUCT.md?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.md?raw';
 import license from '../../../LICENSE?raw';
@@ -47,6 +49,13 @@ const documents = [
   { id: 'publishing', title: 'Publish & release', icon: GitBranch, text: publishing },
   { id: 'roadmap', title: 'Future directions', icon: Flag, text: roadmap },
   {
+    id: 'migration-0.3',
+    title: 'Migrating to 0.3',
+    icon: FileCode2,
+    text: migration03,
+    secondary: true,
+  },
+  {
     id: 'migration-0.2',
     title: 'Migrating to 0.2',
     icon: FileCode2,
@@ -59,6 +68,13 @@ const documents = [
     title: 'Verification report',
     icon: FileCode2,
     text: verification,
+    secondary: true,
+  },
+  {
+    id: 'verification-0.2.0',
+    title: '0.2 verification',
+    icon: FileCode2,
+    text: verification02,
     secondary: true,
   },
   {

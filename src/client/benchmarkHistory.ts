@@ -17,6 +17,15 @@ const score = z.discriminatedUnion('type', [
     .strict(),
 ]);
 
+const comparisonSchema = z
+  .object({
+    meanCp: z.number().finite().nullable(),
+    disagreementCp: z.number().int().nonnegative().max(200_000).nullable(),
+    mateCount: z.number().int().nonnegative().max(32),
+    missingScoreCount: z.number().int().nonnegative().max(32),
+  })
+  .strict();
+
 const resultSchema: z.ZodType<BenchmarkResult> = z
   .object({
     id: z.uuid(),
@@ -57,6 +66,7 @@ const resultSchema: z.ZodType<BenchmarkResult> = z
       )
       .min(1)
       .max(32),
+    comparisons: z.record(z.string().min(15).max(150), comparisonSchema).optional(),
     environment: z
       .object({
         platform: z.string().min(1).max(32),
@@ -102,10 +112,12 @@ export function readBenchmarkHistory(): BenchmarkHistory {
 
 export function saveBenchmarkRun(result: BenchmarkResult): BenchmarkHistory {
   const validated = resultSchema.parse(result);
-  const runs = [
-    validated,
-    ...readBenchmarkHistory().runs.filter((run) => run.id !== validated.id),
-  ].slice(0, MAX_RUNS);
+  const existing = readBenchmarkHistory().runs;
+  const sameRun = existing.find((run) => run.id === validated.id);
+  if (sameRun && JSON.stringify(sameRun) === JSON.stringify(validated)) {
+    return readBenchmarkHistory();
+  }
+  const runs = [validated, ...existing.filter((run) => run.id !== validated.id)].slice(0, MAX_RUNS);
   current = { runs, persistent: false, warning: '' };
   try {
     const serialized = JSON.stringify({ version: 1, runs });

@@ -1,5 +1,5 @@
 import { formatScore } from './chess.js';
-import type { BenchmarkResult } from './types.js';
+import type { BenchmarkResult, ReviewResult } from './types.js';
 
 export function csvCell(value: string | number | boolean | null): string {
   if (value === null) return '';
@@ -67,5 +67,35 @@ export function benchmarkCsv(result: BenchmarkResult): string {
       .map(csvCell)
       .join(','),
   );
+  return [headers.join(','), ...rows].join('\r\n') + '\r\n';
+}
+
+export function reviewCsv(result: ReviewResult): string {
+  const headers = [
+    'ply',
+    'evaluation_white',
+    'move',
+    'classification',
+    'loss_cp',
+    'uncertain',
+    'best_move',
+  ];
+  const annotationByPly = new Map(
+    result.annotations.map((annotation) => [annotation.ply, annotation]),
+  );
+  const rows = result.scores.map((point) => {
+    const annotation = annotationByPly.get(point.ply);
+    return [
+      point.ply,
+      formatScore(point.score),
+      annotation?.san ?? null,
+      annotation?.classification ?? null,
+      annotation?.lossCp ?? null,
+      annotation ? annotation.uncertain : null,
+      annotation?.bestMove ?? null,
+    ]
+      .map(csvCell)
+      .join(',');
+  });
   return [headers.join(','), ...rows].join('\r\n') + '\r\n';
 }

@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Cpu,
   FlaskConical,
+  GitCompareArrows,
   Info,
   Play,
   Plus,
@@ -16,7 +17,12 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
-import { BENCHMARK_POSITIONS, formatScore } from '../../shared/chess';
+import {
+  BENCHMARK_POSITIONS,
+  formatScore,
+  scoreDisagreementCp,
+  validPosition,
+} from '../../shared/chess';
 import { benchmarkCsv } from '../../shared/csv';
 import type { BenchmarkResult, EngineDescriptor, SearchSettings } from '../../shared/types';
 import { useRemoteJob } from '../useRemoteJob';
@@ -38,6 +44,13 @@ export function Experiments({
 }) {
   const [selected, setSelected] = useState(['stockfish-lite', 'stockfish']);
   const [suite, setSuite] = useState(mode === 'benchmark' ? 'standard' : 'current');
+  const [customName, setCustomName] = useState('');
+  const [customFen, setCustomFen] = useState('');
+  const [customError, setCustomError] = useState('');
+  const customPositions =
+    suite === 'custom'
+      ? [{ name: customName.trim() || 'Custom position', fen: customFen.trim() }]
+      : [];
   const [settings, setSettings] = useState<Omit<SearchSettings, 'depth'>>({
     threads: 1,
     hash: 64,
@@ -56,13 +69,28 @@ export function Experiments({
   const result = selectedRun ?? history[0];
   const execute = async () => {
     if (!validDepth) return;
+    if (suite === 'custom') {
+      try {
+        validPosition(customFen.trim());
+        if (customName.trim().length > 80) throw new Error('Name is too long.');
+        setCustomError('');
+      } catch (error) {
+        setCustomError(error instanceof Error ? error.message : 'Invalid position.');
+        return;
+      }
+    }
     setSelectedRun(undefined);
     setHistoryError('');
     const result = await job.run('/benchmarks', {
       ...settings,
       depth,
       engineIds: selected,
-      positions: suite === 'standard' ? BENCHMARK_POSITIONS : [{ name: 'Workspace position', fen }],
+      positions:
+        suite === 'standard'
+          ? BENCHMARK_POSITIONS
+          : suite === 'custom'
+            ? customPositions
+            : [{ name: 'Workspace position', fen }],
     });
     if (result) {
       try {
@@ -76,6 +104,9 @@ export function Experiments({
   const reportedNps = result?.rows.flatMap((row) => (row.nps === null ? [] : [row.nps])) ?? [];
   const maxNps = Math.max(1, ...reportedNps);
   const engineIds = result ? [...new Set(result.rows.map((row) => row.engineId))] : [];
+  const positions = result
+    ? [...new Map(result.rows.map((row) => [row.fen, row.position])).entries()]
+    : [];
   const progress = job.job?.progress;
   return (
     <div className="experiments-page">
@@ -155,18 +186,56 @@ export function Experiments({
                 id="position-suite"
                 value={suite}
                 disabled={job.busy}
-                onChange={(event) => setSuite(event.target.value)}
+                onChange={(event) => {
+                  setSuite(event.target.value);
+                  setCustomError('');
+                }}
               >
                 <option value="current">Current workspace position</option>
                 <option value="standard">Standard suite / 3 positions</option>
+                <option value="custom">Custom FEN position</option>
               </select>
               <ChevronDown size={16} />
             </div>
             <p className="tiny muted">
               {suite === 'standard'
                 ? 'Opening, middlegame, and rook endgame.'
-                : 'Compare evaluations of the position on your board.'}
+                : suite === 'custom'
+                  ? 'Test one exact FEN of your choice.'
+                  : 'Compare evaluations of the position on your board.'}
             </p>
+            {suite === 'custom' && (
+              <div className="custom-position">
+                <label>
+                  Position name
+                  <input
+                    aria-label="Custom position name"
+                    value={customName}
+                    maxLength={80}
+                    placeholder="My test position"
+                    onChange={(event) => setCustomName(event.target.value)}
+                    disabled={job.busy}
+                  />
+                </label>
+                <label>
+                  FEN
+                  <textarea
+                    aria-label="Custom position FEN"
+                    value={customFen}
+                    rows={3}
+                    spellCheck={false}
+                    placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                    onChange={(event) => setCustomFen(event.target.value)}
+                    disabled={job.busy}
+                  />
+                </label>
+                {customError && (
+                  <p className="error-message" role="alert">
+                    {customError}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="settings-grid experiment-settings">
               <label>
                 Depth
@@ -348,6 +417,52 @@ export function Experiments({
                   <Check size={13} />
                   No synthetic scores. No pre-filled benchmarks.
                 </span>
+              </div>
+            )}
+          </section>
+          <section className="card agreement-card">
+            <div className="card-heading">
+              <h3>
+                <GitCompareArrows size={17} />
+                Engine agreement
+              </h3>
+              <span className="subtle-tag">Centipawn spread</span>
+            </div>
+            {result ? (
+              <div className="agreement-list">
+                {positions.map(([fen, name]) => {
+                  const comparison = result.comparisons?.[fen];
+                  const rows = result.rows.filter((row) => row.fen === fen);
+                  const disagreement =
+                    comparison?.disagreementCp ?? scoreDisagreementCp(rows.map((row) => row.score));
+                  const mateCount =
+                    comparison?.mateCount ?? rows.filter((row) => row.score.type === 'mate').length;
+                  return (
+                    <div className="agreement-row" key={fen}>
+                      <div>
+                        <strong>{name}</strong>
+                        <span>
+                          {disagreement === null
+                            ? mateCount
+                              ? 'Mate evaluations are not averaged with centipawns'
+                              : 'Only one centipawn evaluation'
+                            : `${rows.length} engines / ${(disagreement / 100).toFixed(2)} pawn spread`}
+                        </span>
+                      </div>
+                      <span className="mono">
+                        {disagreement === null ? '\u2014' : `${disagreement} cp`}
+                      </span>
+                    </div>
+                  );
+                })}
+                <p className="tiny muted">
+                  Mate scores are counted, not averaged into centipawn means. Smaller spreads mean
+                  closer evaluations, not proof that either engine is correct.
+                </p>
+              </div>
+            ) : (
+              <div className="agreement-empty">
+                Run an experiment to measure how closely engines agree.
               </div>
             )}
           </section>

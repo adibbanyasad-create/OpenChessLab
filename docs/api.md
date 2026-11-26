@@ -60,7 +60,7 @@ Starting in 0.2, `depth`, `seldepth`, `nodes`, `nps`, `timeMs`, and `hashfull` a
 }
 ```
 
-Requires a nonempty main line of at most 200 half-moves. Maximum review depth is 14, and MultiPV must be 1. The result contains `scores` indexed by ply and move `annotations` with classification, estimated loss, SAN, and the prior position's best move. Each score records reported depth (or null) and whether the requested depth was not confirmed. See [usage](usage.md) for classification caveats.
+Requires a nonempty main line of at most 200 half-moves. Maximum review depth is 14, and MultiPV must be 1. The result contains `scores` indexed by ply and move `annotations` with classification, estimated loss, SAN, uncertainty flag, and the prior position's best move. Each score records reported depth (or null) and whether the requested depth was not confirmed. An annotation is uncertain when either adjacent position is unconfirmed; uncertain losses are null rather than fabricated blunder values. See [usage](usage.md) for classification caveats.
 
 ## Benchmark or Compare
 
@@ -84,7 +84,7 @@ Requires a nonempty main line of at most 200 half-moves. Maximum review depth is
 
 Select 1-4 unique engine IDs and 1-8 valid positions. MultiPV must be 1. Runs are sequential and exclusive within this server. A busy server returns 409 rather than silently adding competing searches.
 
-New results contain an ID, `appVersion`, timestamp, requested settings, environment metadata, and one row per engine/position. Rows include requested/reported depth, score, best move, engine-reported nodes/NPS/time, measured wall time, effective options, and warnings. Reported depth, nodes, NPS, and engine time can be null. Wall-clock time is measured by the server. Older exports may omit `appVersion`; do not guess it from the current server version.
+New results contain an ID, `appVersion`, timestamp, requested settings, environment metadata, per-position `comparisons`, and one row per engine/position. Rows include requested/reported depth, score, best move, engine-reported nodes/NPS/time, measured wall time, effective options, and warnings. Reported depth, nodes, NPS, and engine time can be null. Wall-clock time is measured by the server. Older exports may omit `appVersion` or `comparisons`; do not guess them from the current server version. Comparison entries key each canonical FEN to a centipawn mean, centipawn spread, mate count, and reserved missing-score count. Mate scores are counted, not averaged into centipawn statistics.
 
 ## Poll and Cancel
 
@@ -106,7 +106,7 @@ Statuses are `running`, `completed`, `failed`, and `cancelled`. Terminal jobs in
 
 ## Export Results
 
-`GET /api/jobs/:id/export?format=csv` downloads a completed benchmark as CSV. `format=json` returns its complete result. Exporting an unfinished or non-benchmark job returns 409.
+`GET /api/jobs/:id/export?format=csv` downloads a completed benchmark or review as CSV. `format=json` returns its complete result. Exporting an unfinished job or an unsupported job kind returns 409. Review CSV contains ply, White-perspective evaluation, move, classification, estimated centipawn loss, explicit uncertainty, and the prior position's best move.
 
 CSV strings that begin with spreadsheet formula markers are escaped. Columns include settings, actual options, warnings, timestamps, and environment. Export JSON when you need exact structured values, especially scores and option maps.
 

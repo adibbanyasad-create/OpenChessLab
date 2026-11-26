@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { api, getToken, setToken } from '../../src/client/api';
+import { api, followJob, getToken, setToken } from '../../src/client/api';
+import type { Job } from '../../src/shared/types';
 
 afterEach(() => {
   setToken('');
@@ -66,4 +67,63 @@ it('provides a useful error when an unavailable server returns non-JSON content'
     vi.fn(async () => new Response('Unavailable', { status: 503 })),
   );
   await expect(api('/health')).rejects.toThrow('Request failed (503)');
+});
+
+it('retries transient job polling failures without ending the search', async () => {
+  vi.useFakeTimers();
+  try {
+    vi.stubGlobal('sessionStorage', { getItem: () => null });
+    const running: Job = {
+      id: '00000000-0000-4000-8000-000000000001',
+      kind: 'analysis',
+      status: 'running',
+      createdAt: '2026-11-26T00:00:00.000Z',
+      progress: { completed: 0, total: 1, message: 'Searching...' },
+    };
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        calls++;
+        if (calls <= 2) return new Response('Unavailable', { status: 503 });
+        return new Response(JSON.stringify({ ...running, status: 'cancelled' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }),
+    );
+    const seen: string[] = [];
+    const pending = expect(
+      followJob(running, new AbortController().signal, (job) => seen.push(job.status)),
+    ).resolves.toBeUndefined();
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(calls).toBe(3);
+    expect(seen).toEqual(['running', 'cancelled']);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('surfaces repeated polling failures instead of polling forever', async () => {
+  vi.useFakeTimers();
+  try {
+    vi.stubGlobal('sessionStorage', { getItem: () => null });
+    const running: Job = {
+      id: '00000000-0000-4000-8000-000000000002',
+      kind: 'analysis',
+      status: 'running',
+      createdAt: '2026-11-26T00:00:00.000Z',
+      progress: { completed: 0, total: 1, message: 'Searching...' },
+    };
+    const fetchMock = vi.fn(async () => new Response('Unavailable', { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const pending = expect(
+      followJob(running, new AbortController().signal, () => undefined),
+    ).rejects.toThrow('Request failed (503)');
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  } finally {
+    vi.useRealTimers();
+  }
 });

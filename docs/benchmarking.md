@@ -7,15 +7,27 @@ An engine experiment should produce evidence you can inspect. OpenChessLab recor
 1. Choose Engine arena for the current board, or Benchmarks for the standard suite.
 2. Select one to four configured engines.
 3. Set the same requested depth, threads, and hash for all engines. MultiPV is fixed at one.
-4. Start the run. Other application jobs must finish first; the engine manager admits the benchmark exclusively.
-5. Inspect completed depth and warnings before comparing rows.
-6. Download CSV or JSON for permanent records. The UI keeps up to 20 validated runs in this browser when storage is available; the server store remains temporary.
+4. Choose the current board, the standard suite, or one custom FEN entered in the interface.
+5. Start the run. Other application jobs must finish first; the engine manager admits the benchmark exclusively.
+6. Inspect completed depth and warnings before comparing rows.
+7. Download CSV or JSON for permanent records. The UI keeps up to 20 validated runs in this browser when storage is available; the server store remains temporary.
 
-The default suite contains the initial position, the Opera Game after 8...c6, and a rook endgame. These are transparent illustrative positions, **not a statistically validated strength or regression suite**. The API accepts your own named positions, up to eight per request.
+The default suite contains the initial position, the Opera Game after 8...c6, and a rook endgame. These are transparent illustrative positions, **not a statistically validated strength or regression suite**. The API accepts your own named positions, up to eight per request. The interface currently supports one custom FEN at a time.
+
+## Engine Agreement
+
+Each completed run includes a per-position summary:
+
+- `meanCp`: mean of centipawn evaluations only, or null when no centipawn score exists.
+- `disagreementCp`: maximum minus minimum centipawn evaluation, or null with fewer than two centipawn scores.
+- `mateCount`: number of reported mate evaluations.
+- `missingScoreCount`: reserved for future incomplete-score handling; currently always zero.
+
+Mate evaluations are never averaged into centipawn means. They are counted separately because a signed mate surrogate would distort numerical statistics. A smaller spread means closer reported evaluations, not proof that one engine is correct. Older reports may omit `comparisons`; do not infer agreement values for them.
 
 ## What Is Measured
 
-`nodes` is the engine's cumulative reported searched nodes. `nps` is its reported nodes per second, not a server-derived estimate. If an engine omits a measurement or reports an invalid value, it is null in JSON, blank in CSV, and unavailable in the UI. Explicitly reported zero is different from missing. Engines can count nodes differently, so NPS does not imply equal work or playing strength across implementations.
+`nodes` is the engine's cumulative reported searched nodes. `nps` is its reported nodes per second, not a server-derived estimate. If an engine omits a measurement or reports an invalid value, it is null in JSON, blank in CSV, and unavailable in the UI. Explicitly reported zero is different from missing. If an engine reports nonzero nodes in zero reported milliseconds, NPS is unavailable rather than a derived division-by-zero rate. Engines can count nodes differently, so NPS does not imply equal work or playing strength across implementations.
 
 `engineTimeMs` is the engine's UCI time field. `wallTimeMs` is measured by the server from search preparation through bestmove. It includes `ucinewgame`, synchronization, transport, and PV handling; it excludes initial process startup, UCI handshake, neural-network loading, and initial option configuration.
 

@@ -192,6 +192,17 @@ test('reviews a real game and visualizes its measured turning points', async ({ 
   await expect(page.getByRole('img', { name: /Game evaluation by half-move/ })).toBeVisible();
   await expect(page.locator('.review-summary')).toContainText('blunders');
   await expect(page.locator('.error-message')).toHaveCount(0);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export review CSV' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^openchesslab-review-.*\.csv$/);
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk as Uint8Array));
+  const csv = Buffer.concat(chunks).toString('utf8');
+  expect(csv.split('\r\n')[0]).toContain('uncertain');
+  expect(csv).toContain('g4');
+  expect(csv.trim().split('\r\n')).toHaveLength(6);
 });
 
 test('compares two real engines and exports measured JSON and CSV', async ({ page }, info) => {
@@ -221,9 +232,33 @@ test('compares two real engines and exports measured JSON and CSV', async ({ pag
     ),
   ).toBe(true);
   expect(result.settings.depth).toBe(6);
+  expect(Object.keys(result.comparisons ?? {})).toHaveLength(1);
+  await expect(page.locator('.agreement-row')).toHaveCount(1);
+  await expect(page.locator('.agreement-row .mono').first()).toContainText('cp');
   const csvPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV' }).click();
   expect((await csvPromise).suggestedFilename()).toMatch(/\.csv$/);
+});
+
+test('runs a real benchmark on a custom FEN entered in the interface', async ({ page }) => {
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
+  await page.getByLabel('Position suite').selectOption('custom');
+  await page.getByLabel('Custom position FEN').fill('invalid FEN');
+  await page.getByLabel('Custom position name').fill('Custom endgame');
+  await page.getByRole('button', { name: /Run benchmark/ }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Invalid FEN: must contain six space-delimited fields',
+  );
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await page.getByLabel('Custom position FEN').fill('8/5pk1/6p1/3R3p/7P/5KP1/8/6r1 w - - 0 1');
+  await page.getByRole('spinbutton', { name: 'Benchmark depth' }).fill('5');
+  await page.locator('.engine-option').nth(1).click();
+  await page.getByRole('button', { name: /Run benchmark/ }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await expect(page.locator('tbody tr').first()).toContainText('Custom endgame');
+  await expect(page.locator('.agreement-row')).toHaveCount(1);
+  await expect(page.locator('.error-message')).toHaveCount(0);
 });
 
 test('retains real benchmark results across navigation and reload, then clears only history', async ({
@@ -517,9 +552,10 @@ test('keeps experiment and documentation views accessible and internal guides na
   ).toBeVisible();
   await page.getByRole('button', { name: 'API reference', exact: true }).click();
   await page.getByRole('button', { name: 'migration notes', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Migrating to 0.2', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'verification report', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Verification Report: 0.2.0', exact: true }),
+    page.getByRole('heading', { name: 'Verification Report: 0.3.0', exact: true }),
   ).toBeVisible();
   await expect(page.locator('.prose table')).toHaveCount(2);
   const tables = await new AxeBuilder({ page })

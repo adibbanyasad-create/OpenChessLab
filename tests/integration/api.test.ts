@@ -259,6 +259,11 @@ describe('actual Stockfish jobs', () => {
     const result = job.result as BenchmarkResult;
     expect(result.rows).toHaveLength(4);
     expect(result.appVersion).toBe(APP_VERSION);
+    expect(Object.keys(result.comparisons ?? {})).toHaveLength(2);
+    for (const comparison of Object.values(result.comparisons ?? {})) {
+      expect(comparison.mateCount).toBe(0);
+      expect(comparison.disagreementCp).toBeGreaterThanOrEqual(0);
+    }
     expect(new Set(result.rows.map((row) => row.engineId)).size).toBe(2);
     for (const row of result.rows) {
       expect(row.engineName).toContain('Stockfish');
@@ -290,7 +295,17 @@ describe('actual Stockfish jobs', () => {
     expect(result.scores).toHaveLength(5);
     expect(result.annotations).toHaveLength(4);
     expect(result.scores.at(-1)?.score).toEqual({ type: 'mate', value: 0, winner: 'b' });
-    expect(result.annotations.find((move) => move.san === 'g4')?.classification).toBe('blunder');
+    const blunder = result.annotations.find((move) => move.san === 'g4');
+    expect(blunder?.classification).toBe('blunder');
+    expect(blunder?.lossCp).toBeGreaterThanOrEqual(200);
+    expect(blunder?.uncertain).toBe(false);
+    const csv = await app.inject(`/api/jobs/${job.id}/export?format=csv`);
+    expect(csv.statusCode).toBe(200);
+    expect(csv.headers['content-type']).toContain('text/csv');
+    expect(csv.body).toContain('uncertain');
+    expect(csv.body.trim().split('\r\n')).toHaveLength(6);
+    const json = await app.inject(`/api/jobs/${job.id}/export?format=json`);
+    expect(json.json()).toEqual(result);
   });
   it('represents terminal checkmate without invented search nodes', async () => {
     const fen = parseGame('1. f3 e5 2. g4 Qh4# 0-1').positions.at(-1)!;

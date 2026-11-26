@@ -358,6 +358,10 @@ export class UciEngine {
       const depths = lines.map((line) => line.depth);
       const completedDepth = depths.every((value) => value !== null) ? Math.min(...depths) : null;
       const depthLimited = completedDepth === null || completedDepth < settings.depth;
+      const instantResult =
+        statistics.timeMs === 0 && statistics.nodes !== null && statistics.nodes > 0;
+      if (instantResult) statistics.nps = null;
+      for (const line of lines) line.nps = statistics.nps;
       const missing = [
         ...(completedDepth === null ? ['depth'] : []),
         ...(['nodes', 'nps', 'timeMs'] as const).filter((key) => statistics[key] === null),
@@ -376,6 +380,11 @@ export class UciEngine {
           ...(missing.length
             ? [
                 `Engine did not report: ${missing.join(', ')}. Missing measurements are null, not zero.`,
+              ]
+            : []),
+          ...(instantResult
+            ? [
+                'Engine reported zero search time, so its NPS is unavailable rather than a calculated rate.',
               ]
             : []),
         ],

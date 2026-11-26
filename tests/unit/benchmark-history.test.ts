@@ -67,6 +67,28 @@ describe('bounded local benchmark history', () => {
     expect(readBenchmarkHistory().runs.at(-1)?.id).toBe(fixture(6).id);
     expect(JSON.parse(storage.get(KEY)!).runs).toHaveLength(20);
   });
+  it('preserves recorded comparisons and engine provenance when saving', async () => {
+    const result = fixture();
+    result.comparisons = {
+      [DEFAULT_POSITION]: {
+        meanCp: 12.5,
+        disagreementCp: 25,
+        mateCount: 0,
+        missingScoreCount: 0,
+      },
+    };
+    const { saveBenchmarkRun, readBenchmarkHistory } =
+      await import('../../src/client/benchmarkHistory');
+    expect(saveBenchmarkRun(result).runs[0]?.comparisons).toEqual(result.comparisons);
+    expect(readBenchmarkHistory().runs[0]?.rows[0]?.engineName).toBe('Explicit test fixture');
+  });
+  it('keeps the stored copy when an identical run is saved again', async () => {
+    const { saveBenchmarkRun } = await import('../../src/client/benchmarkHistory');
+    saveBenchmarkRun(fixture());
+    const before = storage.get(KEY);
+    expect(saveBenchmarkRun(fixture()).persistent).toBe(true);
+    expect(storage.get(KEY)).toBe(before);
+  });
   it.each(['{broken', '{}', '{"version":2,"runs":[]}', 'x'.repeat(1_000_001)])(
     'rejects malformed or oversized storage without crashing or silently deleting it',
     async (raw) => {

@@ -302,6 +302,22 @@ export function App() {
       setToast('Clipboard unavailable. The FEN is shown in game details.');
     }
   };
+  const exportReview = async () => {
+    const id = reviewJob.job?.id;
+    if (!review || !id) return;
+    try {
+      const token = getToken();
+      const response = await fetch(`/api/jobs/${id}/export?format=csv`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) throw new Error('Review export is unavailable.');
+      const text = await response.text();
+      downloadFile(`openchesslab-review-${id}.csv`, text, 'text/csv');
+      setToast('Review exported.');
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Review export is unavailable.');
+    }
+  };
 
   return (
     <div className="app-shell">
@@ -711,6 +727,9 @@ export function App() {
                       onExport={() =>
                         downloadFile('openchesslab-game.pgn', game.pgn, 'application/x-chess-pgn')
                       }
+                      onExportReview={() => {
+                        void exportReview();
+                      }}
                     />
                     {reviewJob.error && (
                       <div className="error-message" role="alert">
