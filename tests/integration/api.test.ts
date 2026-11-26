@@ -16,9 +16,9 @@ afterAll(async () => {
   await app.close();
 });
 
-async function finish(id: string): Promise<Job> {
+async function finish(id: string, server = app): Promise<Job> {
   for (let attempt = 0; attempt < 500; attempt++) {
-    const response = await app.inject({ method: 'GET', url: `/api/jobs/${id}` });
+    const response = await server.inject({ method: 'GET', url: `/api/jobs/${id}` });
     expect(response.statusCode).toBe(200);
     const job = response.json<Job>();
     if (job.status !== 'running') return job;
@@ -45,6 +45,9 @@ describe('HTTP API and security boundaries', () => {
       expect((await builtApp.inject('/workspace')).body).toContain('Static integration fixture');
       expect((await builtApp.inject('/missing.js')).statusCode).toBe(404);
       expect((await builtApp.inject('/api/missing')).statusCode).toBe(404);
+      const root = await builtApp.inject('/api');
+      expect(root.statusCode).toBe(404);
+      expect(root.headers['content-type']).toContain('application/json');
     } finally {
       await builtApp.close();
     }
@@ -148,6 +151,26 @@ describe('HTTP API and security boundaries', () => {
           })
         ).statusCode,
       ).toBe(200);
+      expect(
+        (
+          await protectedApp.inject({
+            url: '/api/engines',
+            headers: { authorization: `bearer ${token}` },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (await protectedApp.inject({ url: '/api/engines', headers: { authorization: token } }))
+          .statusCode,
+      ).toBe(401);
+      expect(
+        (
+          await protectedApp.inject({
+            url: '/api/engines',
+            headers: { authorization: `Basic ${token}` },
+          })
+        ).statusCode,
+      ).toBe(401);
     } finally {
       await protectedApp.close();
     }
@@ -172,6 +195,22 @@ describe('HTTP API and security boundaries', () => {
 });
 
 describe('actual Stockfish jobs', () => {
+  it('returns the canonical FEN that was actually searched', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/analysis',
+      payload: {
+        fen: DEFAULT_POSITION.replaceAll(' ', '  '),
+        depth: 2,
+        multiPv: 1,
+        hash: 16,
+      },
+    });
+    expect(created.statusCode).toBe(202);
+    const job = await finish(created.json<Job>().id);
+    expect(job.status, job.error).toBe('completed');
+    expect((job.result as AnalysisResult).fen).toBe(DEFAULT_POSITION);
+  });
   it('analyzes with multiple PVs and applies real hash/thread settings', async () => {
     const created = await app.inject({
       method: 'POST',
@@ -211,6 +250,7 @@ describe('actual Stockfish jobs', () => {
     expect(job.status, job.error).toBe('completed');
     const result = job.result as BenchmarkResult;
     expect(result.rows).toHaveLength(4);
+    expect(result.appVersion).toBe(APP_VERSION);
     expect(new Set(result.rows.map((row) => row.engineId)).size).toBe(2);
     for (const row of result.rows) {
       expect(row.engineName).toContain('Stockfish');
@@ -275,5 +315,47 @@ describe('actual Stockfish jobs', () => {
     });
     expect(next.statusCode).toBe(202);
     await app.inject({ method: 'DELETE', url: `/api/jobs/${next.json<Job>().id}` });
+  });
+});
+
+describe('optional UCI measurements through the API', () => {
+  it('exports absent statistics as null JSON values and empty CSV cells', async () => {
+    const fixtureApp = await createApp({
+      rateLimit: false,
+      engines: [
+        {
+          id: 'fixture-stats',
+          name: 'Test fixture',
+          description: 'Protocol testing only',
+          kind: 'native',
+          command: process.execPath,
+          args: [resolve('tests/fixtures/uci-engine.mjs'), 'missing-statistics'],
+        },
+      ],
+    });
+    try {
+      const created = await fixtureApp.inject({
+        method: 'POST',
+        url: '/api/benchmarks',
+        payload: {
+          engineIds: ['fixture-stats'],
+          positions: [{ name: 'Start', fen: DEFAULT_POSITION }],
+          depth: 8,
+          hash: 32,
+        },
+      });
+      expect(created.statusCode).toBe(202);
+      const job = await finish(created.json<Job>().id, fixtureApp);
+      expect(job.status, job.error).toBe('completed');
+      const result = job.result as BenchmarkResult;
+      expect(result.rows[0]).toMatchObject({ nodes: null, nps: null, engineTimeMs: null });
+      const json = await fixtureApp.inject(`/api/jobs/${job.id}/export?format=json`);
+      expect(json.json<BenchmarkResult>().rows[0]?.nps).toBeNull();
+      const csv = await fixtureApp.inject(`/api/jobs/${job.id}/export?format=csv`);
+      expect(csv.body.split('\r\n')[1]!.split(',').slice(9, 12)).toEqual(['', '', '']);
+      expect(csv.body).toContain('Missing measurements are null');
+    } finally {
+      await fixtureApp.close();
+    }
   });
 });

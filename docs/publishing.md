@@ -45,7 +45,7 @@ Do not invent a repository URL before the CLI returns the real one. After creati
 - Set repository topics such as `chess`, `stockfish`, `uci`, `typescript`, and `chess-analysis` if appropriate.
 - Review default workflow permissions; they are read-only except the trusted tag-triggered release job's contents-write permission.
 
-The included CI validates both Node 22 and 24 and runs Chromium desktop/mobile checks. Those versions are configured targets, not proof of a hosted run until GitHub executes them.
+CI is configured for Node 22, 24, and 26, Chromium desktop/mobile checks, a clean archive installation, and a Linux container smoke test. CodeQL runs separately. Check the actual workflow outcomes before asserting that a release is ready.
 
 ## Prepare a Release
 
@@ -55,8 +55,8 @@ The included CI validates both Node 22 and 24 and runs Chromium desktop/mobile c
 4. Create and push a version tag that exactly matches the package version:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 The release workflow checks the tag, installs locked dependencies, runs formatting/lint/types/tests/audit/browser checks, builds the application, and produces `OpenChessLab-VERSION.tar.gz` with a SHA-256 checksum. It creates a **draft GitHub release** for a maintainer to inspect and publish. It does not publish to npm or deploy a server.

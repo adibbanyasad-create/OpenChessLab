@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 22.12 or later in the 22.x line, or Node.js 24.x; npm 10 or later.
+- Node.js 22.12 or later in the 22.x line, Node.js 24.x, or Node.js 26.x; npm 10 or later. Node 24 is the recommended development runtime.
 - A modern browser supporting WebAssembly, native dialogs, Fetch, and CSS Grid. The server runs engine WebAssembly; the browser only renders the interface.
 - Enough RAM for the Node server, the selected neural network, and requested hash. Two concurrent searches can each request 512 MB of hash; additional engine memory is required.
 - Network access for the initial npm install. The Stockfish dependency is approximately 205 MB unpacked and contains full and Lite builds.
@@ -49,7 +49,7 @@ In PowerShell, set each variable using `$env:PORT = "3001"` before `npm start`. 
 
 ## Container Configuration
 
-The Dockerfile builds the frontend and backend and runs as the unprivileged `node` user. Container configuration is supplied, but container execution must be checked on your own Docker host.
+The Dockerfile builds the frontend and backend and runs as the unprivileged `node` user. Its Node 24 base image is pinned by multi-platform digest; Dependabot proposes reviewed base-image updates. CI includes a Linux container build and a real HTTP/Stockfish smoke check. See the verification report for which checks have actually executed, and verify your own host's resource and network configuration.
 
 ```bash
 docker build -t openchesslab:local .
@@ -67,7 +67,11 @@ Do not publish the container port on all host interfaces without authentication,
 
 **Engine timed out:** use the Lite engine, lower the requested depth, or check CPU/RAM contention. A hard timeout stops the process; it does not fabricate a score.
 
-**Requested depth was not reached:** the engine completed under a time cap. Inspect actual depth and warnings, rather than treating the result as the requested depth.
+**Requested depth was not confirmed:** the engine stopped early or did not report a complete depth. A time cap is one possible reason, not an inferred certainty. Inspect reported depth and warnings instead of treating the result as the requested depth.
+
+**An engine statistic is unavailable:** the engine omitted it or reported an invalid value. OpenChessLab does not invent a measurement. JSON uses null and CSV uses an empty cell for that value.
+
+**Benchmark history was not saved:** browser storage may be blocked or full. The current session still shows the result; export JSON/CSV before reloading. History is not a cross-device or synchronized multi-tab database.
 
 **Browser tests cannot start:** run `npx playwright install --with-deps chromium`; headless Chromium also needs its system libraries. Use `PLAYWRIGHT_BROWSERS_PATH` consistently if placing browsers in a non-default cache.
 

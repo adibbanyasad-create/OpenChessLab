@@ -4,7 +4,7 @@ These are **unimplemented ideas**, not advertised capabilities or promises of a 
 
 - Persistent variation trees, editable comments, and multi-game PGN collections.
 - Repetition-aware UCI position histories and more explicit draw-claim semantics.
-- Durable experiment storage and user-defined benchmark suites in the interface.
+- Durable server-side experiment storage, multi-tab synchronization, and user-defined benchmark suites in the interface. Bounded browser-local history is already implemented.
 - Optional tablebase lookup with clear licensing and network/privacy controls.
 - Richer comparative statistics, repeated-run sampling, and confidence intervals.
 - Match scheduling and properly designed strength-testing workflows.

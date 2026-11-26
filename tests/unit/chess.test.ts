@@ -70,8 +70,21 @@ describe('PGN and FEN', () => {
   });
   it('rejects impossible piece counts and inconsistent castling rights', () => {
     expect(() => validPosition('4k3/8/8/8/8/8/8/4K3 w KQ - 0 1')).toThrow('castling rights');
+    expect(() => validPosition('4k3/8/8/8/8/8/8/4K3  w  KQ  -  0  1')).toThrow('castling rights');
     expect(() => validPosition('4k3/8/8/8/8/P7/PPPPPPPP/4K3 w - - 0 1')).toThrow('too many');
     expect(() => validPosition('4k3/8/8/8/NNNNNNNN/PPPPPPPP/4K3/8 w - - 0 1')).toThrow('too many');
+  });
+  it('canonicalizes valid FEN fields with extra spaces', () => {
+    expect(validPosition(DEFAULT_POSITION.replaceAll(' ', '  ')).fen()).toBe(DEFAULT_POSITION);
+  });
+  it('bounds FEN counters before a position reaches an engine', () => {
+    expect(() => validPosition(DEFAULT_POSITION.replace(' 0 1', ' 0 1000001'))).toThrow(
+      'FEN counters',
+    );
+    expect(() => validPosition(DEFAULT_POSITION.replace(' 0 1', ' 1000001 1'))).toThrow(
+      'FEN counters',
+    );
+    expect(() => validPosition(DEFAULT_POSITION.replace(' 0 1', ' 0 1000000'))).not.toThrow();
   });
   it('handles castling, en passant, and underpromotion', () => {
     expect(

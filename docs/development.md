@@ -2,7 +2,7 @@
 
 ## Local Setup
 
-Use Node 22.12+ or 24, npm, and a browser. Run `npm ci` from the root. The checked-in lockfile is the reproducible dependency definition; avoid casual lockfile churn.
+Use Node 22.12+, 24, or 26, npm, and a browser. Node 24 is the default in `.nvmrc`; CI covers all three supported majors. Run `npm ci` from the root. The checked-in lockfile is the reproducible dependency definition; avoid casual lockfile churn. Read [AGENTS.md](../AGENTS.md) for repository-specific invariants when using coding assistants.
 
 ```bash
 npm run dev
@@ -20,7 +20,9 @@ Vite runs on port 5173 and proxies `/api` to the API watcher on 3001. The produc
 - `npm run test:watch`: watch the unit/integration suite.
 - `npm run test:coverage`: V8 coverage of server and shared logic; inspect `coverage/index.html`.
 - `npm run build`: compile the Node server, build the browser application, and generate third-party license notices.
-- `npm run test:e2e`: start the production server on 4173 and run Chromium desktop/mobile workflows and accessibility checks.
+- `npm run test:e2e`: start separate production instances on 4173 (desktop) and 4174 (mobile), retaining production rate limits without letting profiles consume each other's budget. Both ports must be free; existing servers are not reused.
+- `npm run docs:check`: validate local inline Markdown link and image file targets. External URLs and heading anchors are not checked.
+- `npm run smoke:http -- http://127.0.0.1:3001`: check a running local production instance's version, static bundle, and real multithreaded UCI analysis. This script deliberately rejects non-loopback targets.
 - `npm run security`: audit locked production and development dependencies; high/critical advisories fail.
 - `npm run release:pack`: produce the built application archive for a GitHub release. This does not publish to npm or GitHub.
 - `npm run capture:ui`: capture the README screenshot from a running instance and a real completed engine search. Set `OPENCHESSLAB_URL` if it is not running on `http://127.0.0.1:3001`.
@@ -43,7 +45,7 @@ Protocol fixtures are deliberately simple test programs. They exercise supported
 
 Integration tests launch the actual pinned full and Lite Stockfish builds and assert properties of valid searches, not exact scores or timing values. They verify review, terminal positions, exports, authentication, rate limiting, and origin/host behavior through Fastify's injection interface.
 
-Playwright launches the built application and real engines, not mocked browser API responses. It checks imports, legal input, keyboard navigation, promotion, state restoration, reviews, comparisons, downloads, responsive layouts, and automated accessibility. Mobile tests use Chromium device emulation, not real iOS/Android hardware. Automated accessibility checks do not replace manual assistive-technology testing.
+Playwright launches the built application and real engines. Core workflows do not use mocked engine responses. A cancellation race test delays an actual creation response; isolated storage-rendering tests use explicitly labeled fixtures for corrupt or missing data. The suite checks imports, legal input, keyboard navigation, modal isolation, promotion, state restoration, reviews, comparisons, downloads, responsive layouts, and automated accessibility. Mobile tests use Chromium device emulation, not real iOS/Android hardware. Automated accessibility checks do not replace manual assistive-technology testing.
 
 ## Making Changes
 
@@ -57,4 +59,4 @@ Document new environment variables and schema limits. Use measured evidence for 
 
 Run the commands you report. Inspect error and cancellation paths, check request trust boundaries, and verify that persisted browser state is validated. Review external dependencies and license obligations. Do not accept screenshots as proof that API behavior works, or a passing unit suite as proof of browser behavior.
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for the contribution process and [publishing](publishing.md) for releases.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the contribution process, [maintenance](maintenance.md) for recurring checks, and [publishing](publishing.md) for releases.

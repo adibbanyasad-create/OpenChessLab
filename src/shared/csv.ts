@@ -35,6 +35,7 @@ export function benchmarkCsv(result: BenchmarkResult): string {
     'arch',
     'logical_cpus',
     'node',
+    'app_version',
   ];
   const rows = result.rows.map((row) =>
     [
@@ -61,6 +62,7 @@ export function benchmarkCsv(result: BenchmarkResult): string {
       result.environment.arch,
       result.environment.cpus,
       result.environment.node,
+      result.appVersion ?? null,
     ]
       .map(csvCell)
       .join(','),

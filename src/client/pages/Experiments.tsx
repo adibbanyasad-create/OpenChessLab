@@ -13,6 +13,7 @@ import {
   Plus,
   Square,
   Timer,
+  Trash2,
   Zap,
 } from 'lucide-react';
 import { BENCHMARK_POSITIONS, formatScore } from '../../shared/chess';
@@ -21,46 +22,59 @@ import type { BenchmarkResult, EngineDescriptor, SearchSettings } from '../../sh
 import { useRemoteJob } from '../useRemoteJob';
 import { downloadFile } from '../api';
 import { compact } from '../components/EnginePanel';
+import { Modal } from '../components/Modal';
+import { clearBenchmarkHistory, readBenchmarkHistory, saveBenchmarkRun } from '../benchmarkHistory';
 
 export function Experiments({
   mode,
   engines,
   fen,
-  history,
-  onResult,
   onDocs,
 }: {
   mode: 'compare' | 'benchmark';
   engines: EngineDescriptor[];
   fen: string;
-  history: BenchmarkResult[];
-  onResult: (result: BenchmarkResult) => void;
   onDocs: () => void;
 }) {
   const [selected, setSelected] = useState(['stockfish-lite', 'stockfish']);
   const [suite, setSuite] = useState(mode === 'benchmark' ? 'standard' : 'current');
-  const [settings, setSettings] = useState<SearchSettings>({
-    depth: 12,
+  const [settings, setSettings] = useState<Omit<SearchSettings, 'depth'>>({
     threads: 1,
     hash: 64,
     multiPv: 1,
   });
+  const [depthInput, setDepthInput] = useState('12');
+  const depth = Number(depthInput);
+  const validDepth =
+    depthInput.trim() !== '' && Number.isInteger(depth) && depth >= 1 && depth <= 24;
+  const [saved, setSaved] = useState(readBenchmarkHistory);
+  const history = saved.runs;
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [historyError, setHistoryError] = useState('');
   const [selectedRun, setSelectedRun] = useState<BenchmarkResult>();
   const job = useRemoteJob<BenchmarkResult>();
-  const result = selectedRun ?? job.job?.result ?? history[0];
+  const result = selectedRun ?? history[0];
   const execute = async () => {
+    if (!validDepth) return;
     setSelectedRun(undefined);
+    setHistoryError('');
     const result = await job.run('/benchmarks', {
       ...settings,
+      depth,
       engineIds: selected,
       positions: suite === 'standard' ? BENCHMARK_POSITIONS : [{ name: 'Workspace position', fen }],
     });
     if (result) {
-      onResult(result);
+      try {
+        setSaved(saveBenchmarkRun(result));
+      } catch {
+        setHistoryError('This result could not be saved. Export it now to keep a copy.');
+      }
       setSelectedRun(result);
     }
   };
-  const maxNps = Math.max(1, ...(result?.rows.map((row) => row.nps) ?? []));
+  const reportedNps = result?.rows.flatMap((row) => (row.nps === null ? [] : [row.nps])) ?? [];
+  const maxNps = Math.max(1, ...reportedNps);
   const engineIds = result ? [...new Set(result.rows.map((row) => row.engineId))] : [];
   const progress = job.job?.progress;
   return (
@@ -93,10 +107,10 @@ export function Experiments({
             </h3>
           </div>
           <div className="experiment-config-body">
-            <label className="field-label">
-              Select engines <span className="muted">{selected.length} selected</span>
-            </label>
-            <div className="engine-options">
+            <div className="field-label">
+              Select up to 4 engines <span className="muted">{selected.length} selected</span>
+            </div>
+            <div className="engine-options" role="group" aria-label="Engines to compare">
               {engines.map((engine) => (
                 <label
                   className={`engine-option ${selected.includes(engine.id) ? 'selected' : ''}`}
@@ -112,7 +126,7 @@ export function Experiments({
                           : selected.filter((id) => id !== engine.id),
                       )
                     }
-                    disabled={job.busy}
+                    disabled={job.busy || (!selected.includes(engine.id) && selected.length >= 4)}
                   />
                   <span className="check-box">
                     {selected.includes(engine.id) && <Check size={13} />}
@@ -161,13 +175,11 @@ export function Experiments({
                   type="number"
                   min="1"
                   max="24"
-                  value={settings.depth}
-                  onChange={(event) =>
-                    setSettings({
-                      ...settings,
-                      depth: Math.max(1, Math.min(24, Number(event.target.value))),
-                    })
-                  }
+                  value={depthInput}
+                  inputMode="numeric"
+                  aria-invalid={!validDepth}
+                  aria-describedby={!validDepth ? 'benchmark-depth-error' : undefined}
+                  onChange={(event) => setDepthInput(event.target.value)}
                   disabled={job.busy}
                 />
               </label>
@@ -204,6 +216,11 @@ export function Experiments({
                 </select>
               </label>
             </div>
+            {!validDepth && (
+              <p id="benchmark-depth-error" className="error-message">
+                Choose a whole-number depth from 1 to 24.
+              </p>
+            )}
             <div className="experiment-note">
               <Info size={16} />
               <span>
@@ -211,6 +228,10 @@ export function Experiments({
                 excludes engine startup.
               </span>
             </div>
+            <p className="tiny muted storage-notice">
+              Completed runs are saved on this browser when storage is available. Use Clear history
+              below to remove them.
+            </p>
             {job.error && (
               <div className="error-message" role="alert">
                 {job.error}
@@ -218,7 +239,10 @@ export function Experiments({
             )}
             <button
               className="button primary run-experiment"
-              disabled={!selected.length || !engines.length || selected.length > 4}
+              disabled={
+                !job.busy &&
+                (!validDepth || !selected.length || !engines.length || selected.length > 4)
+              }
               onClick={() => {
                 if (job.busy) void job.cancel();
                 else void execute();
@@ -257,7 +281,7 @@ export function Experiments({
             <Metric
               icon={<Zap size={19} />}
               label="Peak throughput"
-              value={result ? compact(Math.max(...result.rows.map((row) => row.nps))) : '\u2014'}
+              value={reportedNps.length ? compact(Math.max(...reportedNps)) : '\u2014'}
               detail="Engine-reported nodes / sec"
             />
             <Metric
@@ -284,18 +308,21 @@ export function Experiments({
                 {result.rows.map((row, index) => (
                   <div className="throughput-row" key={`${row.engineId}-${index}`}>
                     <div>
-                      <strong>
-                        {engines.find((engine) => engine.id === row.engineId)?.name ?? row.engineId}
-                      </strong>
+                      <strong title={row.engineName}>{row.engineName}</strong>
                       <span>{row.position}</span>
                     </div>
                     <div className="throughput-track">
                       <div
-                        style={{ width: `${Math.max(1, (row.nps / maxNps) * 100)}%` }}
+                        style={{ width: `${row.nps === null ? 0 : (row.nps / maxNps) * 100}%` }}
                         className={engineIds.indexOf(row.engineId) % 2 ? 'secondary-bar' : ''}
                       />
                     </div>
-                    <span className="mono">{compact(row.nps)}</span>
+                    <span
+                      className="mono"
+                      title={row.nps === null ? 'NPS not reported by this engine' : undefined}
+                    >
+                      {compact(row.nps)}
+                    </span>
                   </div>
                 ))}
                 <p className="tiny muted">
@@ -352,6 +379,7 @@ export function Experiments({
             {history.length > 1 && (
               <select
                 aria-label="Select completed run"
+                disabled={job.busy}
                 value={result?.id ?? ''}
                 onChange={(event) =>
                   setSelectedRun(history.find((run) => run.id === event.target.value))
@@ -359,7 +387,7 @@ export function Experiments({
               >
                 {history.map((run) => (
                   <option key={run.id} value={run.id}>
-                    {new Date(run.createdAt).toLocaleTimeString()} / {run.rows.length} searches
+                    {new Date(run.createdAt).toLocaleString()} / {run.rows.length} searches
                   </option>
                 ))}
               </select>
@@ -389,8 +417,23 @@ export function Experiments({
             >
               JSON
             </button>
+            <button
+              className="icon-button"
+              aria-label="Clear saved benchmark history"
+              title="Clear saved benchmark history"
+              disabled={(!history.length && !saved.warning) || job.busy}
+              onClick={() => setConfirmClear(true)}
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         </div>
+        {result && (
+          <div className="result-context">
+            <span>{job.busy ? 'Showing a previous completed run' : 'Completed run'}</span>
+            <time dateTime={result.createdAt}>{new Date(result.createdAt).toLocaleString()}</time>
+          </div>
+        )}
         <div className="table-scroll" role="region" aria-label="Engine search results" tabIndex={0}>
           <table>
             <thead>
@@ -408,9 +451,7 @@ export function Experiments({
               {result?.rows.map((row, index) => (
                 <tr key={index}>
                   <td>
-                    <strong>
-                      {engines.find((engine) => engine.id === row.engineId)?.name ?? row.engineId}
-                    </strong>
+                    <strong>{row.engineName}</strong>
                     <span className="table-secondary">{row.position}</span>
                   </td>
                   <td>
@@ -418,16 +459,16 @@ export function Experiments({
                   </td>
                   <td className="mono">{row.bestMove ?? '\u2014'}</td>
                   <td>
-                    {row.depth}
+                    {row.depth ?? '\u2014'}
                     <span className="muted"> / {row.requestedDepth}</span>
                     {row.depthLimited && (
-                      <span className="limited-label" title="Time limit reached">
+                      <span className="limited-label" title="Requested depth was not confirmed">
                         limited
                       </span>
                     )}
                   </td>
-                  <td className="mono">{row.nodes.toLocaleString()}</td>
-                  <td className="mono">{row.nps.toLocaleString()}</td>
+                  <td className="mono">{row.nodes?.toLocaleString() ?? '\u2014'}</td>
+                  <td className="mono">{row.nps?.toLocaleString() ?? '\u2014'}</td>
                   <td className="mono">{(row.wallTimeMs / 1000).toFixed(2)}s</td>
                 </tr>
               ))}
@@ -444,25 +485,61 @@ export function Experiments({
         <div className="table-footer">
           <span>
             {result
-              ? `${result.environment.platform} / ${result.environment.arch} / ${result.environment.cpus} logical CPUs / Node ${result.environment.node}`
+              ? `${result.environment.platform} / ${result.environment.arch} / ${result.environment.cpus} logical CPUs / Node ${result.environment.node} / OpenChessLab ${result.appVersion ?? 'version not recorded'}`
               : 'Benchmarks are isolated from other application jobs.'}
           </span>
           <span>
-            {history.length} {history.length === 1 ? 'run' : 'runs'} this session
+            {history.length} {history.length === 1 ? 'run' : 'runs'}{' '}
+            {saved.persistent ? 'saved locally' : 'this session'}
           </span>
         </div>
         {result?.rows.some((row) => row.warnings.length) && (
           <div className="inline-note result-warning">
             <Info size={15} />
-            Some searches reached a time limit or use engine defaults. See the JSON export for
-            per-search warnings and effective options.
+            Some measurements are unavailable, requested depths were not confirmed, or engine
+            defaults were used. See the JSON export for per-search warnings and effective options.
           </div>
         )}
       </section>
+      {(saved.warning || historyError) && (
+        <div className="inline-note" role="status">
+          <Info size={15} />
+          {historyError || saved.warning}
+        </div>
+      )}
       <p className="page-footnote">
-        Evaluations are from White's perspective. Results stay in this session; export them to keep
-        a permanent record.
+        Evaluations are from White's perspective. Up to 20 completed runs, including their FENs, are
+        saved in this browser when storage is available. Export important results for a permanent
+        record.
       </p>
+      {confirmClear && (
+        <Modal
+          title="Clear saved benchmark history?"
+          description="Close other OpenChessLab tabs before clearing. This removes local saved runs, not downloaded exports or server job records."
+          onClose={() => setConfirmClear(false)}
+        >
+          <div className="modal-footer">
+            <button className="button secondary" onClick={() => setConfirmClear(false)}>
+              Keep history
+            </button>
+            <button
+              className="button danger"
+              onClick={() => {
+                const next = clearBenchmarkHistory();
+                setSaved(next);
+                if (!next.runs.length) {
+                  setSelectedRun(undefined);
+                  setHistoryError('');
+                }
+                setConfirmClear(false);
+                requestAnimationFrame(() => document.getElementById('position-suite')?.focus());
+              }}
+            >
+              Clear history
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

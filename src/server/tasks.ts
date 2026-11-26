@@ -5,6 +5,7 @@ import type { AnalysisRequest, BenchmarkRequest, ReviewRequest } from '../shared
 import type { BenchmarkResult, GameData, JobProgress, ReviewResult } from '../shared/types.js';
 import type { EngineConfig } from './config.js';
 import { UciEngine } from './uci.js';
+import { APP_VERSION } from './version.js';
 
 type Progress = (progress: JobProgress) => void;
 
@@ -21,7 +22,7 @@ export async function analyzePosition(
       progress({
         completed: 0,
         total: 1,
-        message: `Searching depth ${lines[0]?.depth ?? 0}...`,
+        message: lines[0]?.depth == null ? 'Searching...' : `Searching depth ${lines[0].depth}...`,
         lines,
       });
     });
@@ -94,6 +95,7 @@ export async function runBenchmark(
   const { depth, threads, hash, multiPv } = request;
   const result: BenchmarkResult = {
     id,
+    appVersion: APP_VERSION,
     createdAt: new Date().toISOString(),
     settings: { depth, threads, hash, multiPv },
     rows: [],
@@ -123,7 +125,7 @@ export async function runBenchmark(
           engineId: config.id,
           engineName: analysis.engineName,
           position: position.name,
-          fen: position.fen,
+          fen: analysis.fen,
           depth: analysis.completedDepth,
           requestedDepth: request.depth,
           depthLimited: analysis.depthLimited,

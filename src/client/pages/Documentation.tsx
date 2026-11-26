@@ -10,6 +10,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import overview from '../../../docs/overview.md?raw';
 import installation from '../../../docs/installation.md?raw';
 import usage from '../../../docs/usage.md?raw';
@@ -22,6 +23,11 @@ import security from '../../../SECURITY.md?raw';
 import development from '../../../docs/development.md?raw';
 import publishing from '../../../docs/publishing.md?raw';
 import roadmap from '../../../docs/roadmap.md?raw';
+import maintenance from '../../../docs/maintenance.md?raw';
+import migration from '../../../docs/migration-0.2.md?raw';
+import agents from '../../../AGENTS.md?raw';
+import verification from '../../../docs/verification.md?raw';
+import previousVerification from '../../../docs/verification-0.1.0.md?raw';
 import conduct from '../../../CODE_OF_CONDUCT.md?raw';
 import notices from '../../../THIRD_PARTY_NOTICES.md?raw';
 import license from '../../../LICENSE?raw';
@@ -37,8 +43,31 @@ const documents = [
   { id: 'contributing', title: 'Contribute to the project', icon: GitBranch, text: contributing },
   { id: 'security', title: 'Security & privacy', icon: LockKeyhole, text: security },
   { id: 'development', title: 'Development guide', icon: Code2, text: development },
+  { id: 'maintenance', title: 'Maintenance & updates', icon: Settings2, text: maintenance },
   { id: 'publishing', title: 'Publish & release', icon: GitBranch, text: publishing },
   { id: 'roadmap', title: 'Future directions', icon: Flag, text: roadmap },
+  {
+    id: 'migration-0.2',
+    title: 'Migrating to 0.2',
+    icon: FileCode2,
+    text: migration,
+    secondary: true,
+  },
+  { id: 'agents', title: 'Coding-agent guidance', icon: Code2, text: agents, secondary: true },
+  {
+    id: 'verification',
+    title: 'Verification report',
+    icon: FileCode2,
+    text: verification,
+    secondary: true,
+  },
+  {
+    id: 'verification-0.1.0',
+    title: 'Initial verification',
+    icon: FileCode2,
+    text: previousVerification,
+    secondary: true,
+  },
   {
     id: 'code_of_conduct',
     title: 'Code of Conduct',
@@ -109,7 +138,18 @@ export function Documentation({
         </nav>
         <article className="card prose">
           <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
             components={{
+              table: ({ children }) => (
+                <div
+                  className="table-scroll docs-table"
+                  tabIndex={0}
+                  role="group"
+                  aria-label="Scrollable documentation table"
+                >
+                  <table>{children}</table>
+                </div>
+              ),
               pre: ({ children }) => (
                 <pre tabIndex={0} role="group" aria-label="Code example">
                   {children}

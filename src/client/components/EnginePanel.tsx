@@ -16,8 +16,10 @@ import type {
   SearchSettings,
 } from '../../shared/types';
 
-export const compact = (number: number) =>
-  new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(number);
+export const compact = (number: number | null | undefined) =>
+  number == null
+    ? '\u2014'
+    : new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(number);
 
 export function EnginePanel({
   engines,
@@ -28,6 +30,7 @@ export function EnginePanel({
   lines,
   result,
   busy,
+  stopped,
   error,
   live,
   setLive,
@@ -44,6 +47,7 @@ export function EnginePanel({
   lines: EngineLine[];
   result?: AnalysisResult;
   busy: boolean;
+  stopped: boolean;
   error: string;
   live: boolean;
   setLive: (live: boolean) => void;
@@ -62,7 +66,15 @@ export function EnginePanel({
         </h3>
         <span className={`status-label ${busy ? 'working' : result ? 'done' : ''}`}>
           <span className="status-dot" />
-          {busy ? 'Analyzing' : result ? 'Complete' : 'Ready'}
+          {busy
+            ? 'Analyzing'
+            : result
+              ? 'Complete'
+              : stopped
+                ? 'Stopped'
+                : error
+                  ? 'Error'
+                  : 'Ready'}
         </span>
       </div>
       <div className="engine-body">
@@ -120,7 +132,7 @@ export function EnginePanel({
           <div>
             <span>Depth</span>
             <strong>
-              {first ? first.depth : '\u2014'} <small>/ {settings.depth}</small>
+              {first?.depth ?? '\u2014'} <small>/ {settings.depth}</small>
             </strong>
           </div>
           <div>
@@ -130,15 +142,17 @@ export function EnginePanel({
           <div>
             <span>Search time</span>
             <strong>
-              {first ? `${(first.timeMs / 1000).toFixed(2)}` : '\u2014'}
-              <small>{first ? ' s' : ''}</small>
+              {first?.timeMs != null ? `${(first.timeMs / 1000).toFixed(2)}` : '\u2014'}
+              <small>{first?.timeMs != null ? ' s' : ''}</small>
             </strong>
           </div>
         </div>
         <div className="pv-heading">
           <h4>Principal variations</h4>
           <span className="subtle-tag">
-            {settings.multiPv} {settings.multiPv === 1 ? 'line' : 'lines'}
+            {lines.length
+              ? `${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`
+              : `Up to ${settings.multiPv} lines`}
           </span>
         </div>
         <div className="variations">

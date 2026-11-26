@@ -1,6 +1,7 @@
 export const LIMITS = {
   pgnBytes: 256_000,
   gamePlies: 400,
+  fenCounter: 1_000_000,
   reviewPlies: 200,
   maxDepth: 24,
   reviewDepth: 14,

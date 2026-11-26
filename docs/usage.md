@@ -23,9 +23,11 @@ Evaluations always use **White's perspective**. `+0.50` favors White by half a p
 
 Principal variations are legal SAN continuations of the current FEN. During a search, scores can change and different variations can temporarily be at different depths. The finished result reports the minimum completed depth across displayed lines. Bound-only engine scores are not used as exact evaluations.
 
+Missing measurements appear as unavailable, not as measured zeros. An engine can report counters on separate UCI lines; the latest reported search-wide values are used. If depth is unknown, it remains unknown. A search ending before its requested depth is not automatically described as a timeout.
+
 **Nodes / sec** and **Search time** in the analysis panel come from UCI `info`. The benchmark export also includes separately measured wall-clock search time. Neither number includes initial engine startup.
 
-Depth is a target, not a guarantee. The server caps each interactive search at eight seconds plus a hard-response grace period. Time-limited results are marked explicitly. Turn Live analysis off to navigate without starting another search, then use Analyze manually.
+Depth is a target, not a guarantee. The server caps each interactive search at eight seconds plus a hard-response grace period. Unconfirmed requested depths are marked explicitly. Turn Live analysis off to navigate without starting another search, then use Analyze manually. Manual searches are cancelled when you navigate or change their settings; the Stop action has a visible stopped state.
 
 Hash and threads are set only if the engine advertises the corresponding UCI spin option. Actual applied options are recorded. Unsupported options produce a warning; the engine's own default is retained.
 
@@ -42,7 +44,7 @@ Labels estimate centipawn loss for the player who moved, comparing the evaluatio
 - 100-199 cp: mistake.
 - 200 cp or more: blunder.
 
-Mate scores use a signed 10,000 cp surrogate for this heuristic. Changing a mate distance for the same winner does not incur a loss. These labels are depth-dependent; they are not centipawn accuracy, win probability, or a strength rating. Time-capped positions are marked in the result. FEN-only searches do not include repetition history.
+Mate scores use a signed 10,000 cp surrogate for this heuristic. Changing a mate distance for the same winner does not incur a loss. These labels are depth-dependent; they are not centipawn accuracy, win probability, or a strength rating. Positions whose requested depth was not confirmed are marked in the result. FEN-only searches do not include repetition history.
 
 ## Keyboard Controls
 
@@ -54,4 +56,10 @@ Mate scores use a signed 10,000 cp surrogate for this heuristic. Changing a mate
 - Escape: close a dialog.
 - On the focused board: arrow keys move between squares; Enter or Space selects a piece or destination.
 
-Shortcuts do not intercept typing inside inputs or open dialogs. The board, controls, imports, and promotion choices are keyboard reachable.
+Shortcuts do not intercept typing inside inputs or any open dialog, including promotion and history confirmation. Board focus is retained across keyboard moves and flips. The board, controls, imports, and promotion choices are keyboard reachable.
+
+## Keep Experiment Records
+
+Completed comparisons and benchmarks are saved in this browser when storage is available, up to 20 runs and 1 MB. The run selector restores them across navigation and reload. Recorded engine names, dates, settings, and available application versions remain attached to the original run; changing the currently installed engine does not relabel old results.
+
+Use Export CSV or JSON for durable research records. The Clear history control asks for confirmation and removes only locally saved benchmarks, not your PGN, downloaded files, or server job records. Close other OpenChessLab tabs first because their in-memory views are not synchronized. If storage is blocked, full, or corrupt, the interface explains the problem instead of claiming a save or deletion succeeded.

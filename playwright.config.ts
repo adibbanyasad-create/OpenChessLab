@@ -14,13 +14,13 @@ export default defineConfig({
       name: 'desktop',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1000 } },
     },
-    { name: 'mobile', use: { ...devices['Pixel 7'] } },
+    { name: 'mobile', use: { ...devices['Pixel 7'], baseURL: 'http://127.0.0.1:4174' } },
   ],
-  webServer: {
+  webServer: [4173, 4174].map((port) => ({
     command: 'npm run start',
-    env: { HOST: '127.0.0.1', PORT: '4173', ALLOWED_HOSTS: '127.0.0.1,localhost' },
-    url: 'http://127.0.0.1:4173/api/health',
-    reuseExistingServer: !process.env.CI,
+    env: { HOST: '127.0.0.1', PORT: String(port), ALLOWED_HOSTS: '127.0.0.1,localhost' },
+    url: `http://127.0.0.1:${port}/api/health`,
+    reuseExistingServer: false,
     timeout: 30_000,
-  },
+  })),
 });

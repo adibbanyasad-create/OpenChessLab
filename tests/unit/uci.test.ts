@@ -38,24 +38,74 @@ describe('UCI info parsing', () => {
       winner,
     });
   });
-  it.each([
-    'info string score cp 100 pv e2e4',
-    'info depth 7 score cp NaN pv e2e4',
-    'info depth 7 nodes 100',
-    'bestmove e2e4',
-    'info score other 3 pv e2e4',
-  ])('ignores non-search and invalid output', (line) => {
-    expect(parseInfo(line, 'w')).toBeUndefined();
-  });
+  it.each(['info string score cp 100 pv e2e4', 'bestmove e2e4', 'info currmove e2e4'])(
+    'ignores non-search and invalid output',
+    (line) => {
+      expect(parseInfo(line, 'w')).toBeUndefined();
+    },
+  );
   it('limits nonnegative statistics and PV length', () => {
     const info = parseInfo(
       `info depth 2 score cp 0 nodes -1 nps -2 hashfull 2000 pv ${Array.from({ length: 100 }, () => 'e2e4').join(' ')}`,
       'w',
     );
-    expect(info?.nodes).toBe(0);
-    expect(info?.nps).toBe(0);
-    expect(info?.hashfull).toBe(1000);
+    expect(info?.nodes).toBeUndefined();
+    expect(info?.nps).toBeUndefined();
+    expect(info?.hashfull).toBeUndefined();
     expect(info?.pv).toHaveLength(64);
+  });
+  it('accepts statistics-only messages without inventing a score', () => {
+    expect(parseInfo('info depth 7 nodes 100 nps 5000 time 20', 'w')).toEqual({
+      multiPv: 1,
+      depth: 7,
+      nodes: 100,
+      nps: 5000,
+      timeMs: 20,
+    });
+  });
+  it('treats the rest of an info string message as text, not measurements', () => {
+    expect(parseInfo('info depth 7 string nodes 123 score cp 500 pv e2e4', 'w')).toEqual({
+      multiPv: 1,
+      depth: 7,
+    });
+    expect(parseInfo('info string', 'w')).toBeUndefined();
+  });
+  it('accepts UCI whitespace without requiring a literal space after info', () => {
+    expect(parseInfo('\tinfo\tdepth\t8\tscore\tcp\t31\tpv\te2e4\t', 'w')).toMatchObject({
+      depth: 8,
+      score: { type: 'cp', value: 31 },
+      pv: ['e2e4'],
+    });
+  });
+  it.each(['NaN', 'Infinity', '1.5', '9007199254740992', '0x10', '1e3'])(
+    'ignores invalid counters: %s',
+    (value) => {
+      const info = parseInfo(`info score cp 10 nodes ${value} nps ${value} pv e2e4`, 'w');
+      expect(info?.nodes).toBeUndefined();
+      expect(info?.nps).toBeUndefined();
+    },
+  );
+  it('does not turn an invalid score into a usable evaluation', () => {
+    expect(parseInfo('info depth 7 score cp NaN pv e2e4', 'w')?.score).toBeUndefined();
+    expect(parseInfo('info score other 3 pv e2e4', 'w')?.score).toBeUndefined();
+    expect(parseInfo('info score cp 0x20 pv e2e4', 'w')?.score).toBeUndefined();
+  });
+  it.each(['0', '-1', 'two', '1025'])(
+    'does not relabel an invalid MultiPV index as the best line',
+    (value) => {
+      expect(parseInfo(`info multipv ${value} score cp 30 pv e2e4`, 'w')).toBeUndefined();
+    },
+  );
+  it('stops a PV at its first invalid token rather than joining unrelated moves', () => {
+    expect(parseInfo('info score cp 10 pv e2e4 invalid e7e5', 'w')?.pv).toEqual(['e2e4']);
+  });
+  it('normalizes negative zero without losing the mate winner', () => {
+    expect(Object.is(parseInfo('info score cp 0 pv e2e4', 'b')?.score?.value, -0)).toBe(false);
+    expect(parseInfo('info score mate 0 pv e2e4', 'b')?.score).toEqual({
+      type: 'mate',
+      value: 0,
+      winner: 'w',
+    });
   });
 });
 
@@ -74,7 +124,7 @@ describe('UCI process lifecycle', () => {
       await engine.close();
     }
   });
-  it.each(['crash', 'bad-move', 'no-score', 'oversized'])(
+  it.each(['crash', 'bad-move', 'no-score', 'oversized', 'bound-only'])(
     'fails safely for %s output',
     async (mode) => {
       const engine = fixture(mode);
@@ -140,5 +190,134 @@ describe('UCI process lifecycle', () => {
     } finally {
       await engine.close();
     }
+  });
+  it('merges separate statistics messages into the completed scored variation', async () => {
+    const engine = fixture('split-statistics');
+    try {
+      await engine.start(settings, AbortSignal.timeout(3000));
+      const result = await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000));
+      expect(result.lines[0]).toMatchObject({
+        depth: 8,
+        seldepth: 12,
+        nodes: 1500,
+        nps: 30000,
+        timeMs: 50,
+        hashfull: 7,
+      });
+      expect(result.warnings).toEqual([]);
+    } finally {
+      await engine.close();
+    }
+  });
+  it('represents unreported measurements as null, not measured zero', async () => {
+    const engine = fixture('missing-statistics');
+    try {
+      await engine.start(settings, AbortSignal.timeout(3000));
+      const result = await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000));
+      expect(result.lines[0]).toMatchObject({
+        nodes: null,
+        nps: null,
+        timeMs: null,
+        hashfull: null,
+        seldepth: null,
+      });
+      expect(result.completedDepth).toBe(8);
+      expect(result.warnings.join(' ')).toContain('Missing measurements are null, not zero');
+    } finally {
+      await engine.close();
+    }
+  });
+  it('does not carry metrics from the previous position into a new search', async () => {
+    const engine = fixture('reset-statistics');
+    try {
+      await engine.start(settings, AbortSignal.timeout(3000));
+      expect(
+        (await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000))).lines[0]?.nps,
+      ).toBe(20000);
+      const second = await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000));
+      expect(second.lines[0]?.nps).toBeNull();
+      expect(second.lines[0]?.nodes).toBeNull();
+    } finally {
+      await engine.close();
+    }
+  });
+  it('keeps an explicitly reported zero distinct from an absent measurement', async () => {
+    const engine = fixture('zero-statistics');
+    try {
+      await engine.start(settings, AbortSignal.timeout(3000));
+      const result = await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000));
+      expect(result.lines[0]).toMatchObject({ nodes: 0, nps: 0, timeMs: 0, hashfull: 0 });
+      expect(result.warnings).toEqual([]);
+    } finally {
+      await engine.close();
+    }
+  });
+  it('records an unknown completed depth without claiming a time limit was reached', async () => {
+    const engine = fixture('missing-depth');
+    try {
+      await engine.start(settings, AbortSignal.timeout(3000));
+      const result = await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000));
+      expect(result.completedDepth).toBeNull();
+      expect(result.depthLimited).toBe(true);
+      expect(result.warnings.join(' ')).toContain('depth');
+      expect(result.warnings.join(' ')).not.toContain('Time limit reached');
+    } finally {
+      await engine.close();
+    }
+  });
+  it('retains each PV depth while applying the latest total search counters', async () => {
+    const engine = fixture('multiple-lines');
+    try {
+      await engine.start({ ...settings, multiPv: 2 }, AbortSignal.timeout(3000));
+      const result = await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000));
+      expect(result.lines.map((line) => line.depth)).toEqual([8, 7]);
+      expect(result.lines.map((line) => line.nodes)).toEqual([2000, 2000]);
+      expect(result.completedDepth).toBe(7);
+      expect(result.depthLimited).toBe(true);
+    } finally {
+      await engine.close();
+    }
+  });
+  it("does not borrow another variation's depth when an engine omits it", async () => {
+    const engine = fixture('unknown-pv-depth');
+    try {
+      await engine.start({ ...settings, multiPv: 3 }, AbortSignal.timeout(3000));
+      const result = await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000));
+      expect(result.lines.map((line) => line.depth)).toEqual([8, 7, null]);
+      expect(result.completedDepth).toBeNull();
+      expect(result.depthLimited).toBe(true);
+    } finally {
+      await engine.close();
+    }
+  });
+  it('does not assign an unscoped depth record to multiple different variations', async () => {
+    const engine = fixture('unscoped-multipv-depth');
+    try {
+      await engine.start({ ...settings, multiPv: 2 }, AbortSignal.timeout(3000));
+      const result = await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000));
+      expect(result.lines.map((line) => line.depth)).toEqual([8, null]);
+      expect(result.lines.map((line) => line.seldepth)).toEqual([null, null]);
+      expect(result.completedDepth).toBeNull();
+    } finally {
+      await engine.close();
+    }
+  });
+  it('enforces a response deadline when an engine ignores its search time limit', async () => {
+    const engine = fixture('stall');
+    try {
+      await engine.start(settings, AbortSignal.timeout(3000));
+      await expect(
+        engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(8000), undefined, 10),
+      ).rejects.toThrow('response timed out');
+    } finally {
+      await engine.close();
+    }
+  });
+  it('terminates an engine that ignores quit', async () => {
+    const engine = fixture('ignore-quit');
+    await engine.start(settings, AbortSignal.timeout(3000));
+    const start = Date.now();
+    await engine.close();
+    expect(Date.now() - start).toBeLessThan(2000);
   });
 });

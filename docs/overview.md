@@ -14,7 +14,7 @@ Chess rewards curiosity. OpenChessLab gives that curiosity a place to work: one 
 
 The application needs no account or external analysis service. The browser talks only to its own server. That server runs engines on the machine where OpenChessLab is installed. In a remote preview, that means the preview server, not your laptop.
 
-Your active PGN is saved in browser storage when available. Engine jobs live in server memory temporarily; benchmark results stay in the current UI session. Use the export buttons to preserve work.
+Your active PGN and up to 20 benchmark records are saved in browser storage when available. Engine jobs live in server memory temporarily. Storage failures are reported, saved history can be cleared, and export buttons provide permanent copies. Missing engine statistics are shown as unavailable, not as measured zeros.
 
 ## Open by Design
 

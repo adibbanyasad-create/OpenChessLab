@@ -36,14 +36,14 @@ export interface SearchSettings {
 }
 
 export interface EngineLine {
-  depth: number;
-  seldepth: number;
+  depth: number | null;
+  seldepth: number | null;
   multiPv: number;
   score: Score;
-  nodes: number;
-  nps: number;
-  timeMs: number;
-  hashfull: number;
+  nodes: number | null;
+  nps: number | null;
+  timeMs: number | null;
+  hashfull: number | null;
   pv: string[];
   san: string[];
   bound?: 'lower' | 'upper';
@@ -59,7 +59,7 @@ export interface AnalysisResult {
   lines: EngineLine[];
   bestMove: string | null;
   wallTimeMs: number;
-  completedDepth: number;
+  completedDepth: number | null;
   depthLimited: boolean;
   terminal: boolean;
 }
@@ -75,7 +75,7 @@ export interface ReviewAnnotation {
 export interface ReviewResult {
   engineId: string;
   settings: SearchSettings;
-  scores: { ply: number; score: Score; depth: number; depthLimited: boolean }[];
+  scores: { ply: number; score: Score; depth: number | null; depthLimited: boolean }[];
   annotations: ReviewAnnotation[];
   elapsedMs: number;
 }
@@ -85,12 +85,12 @@ export interface BenchmarkRow {
   engineName: string;
   position: string;
   fen: string;
-  depth: number;
+  depth: number | null;
   requestedDepth: number;
   depthLimited: boolean;
-  nodes: number;
-  nps: number;
-  engineTimeMs: number;
+  nodes: number | null;
+  nps: number | null;
+  engineTimeMs: number | null;
   wallTimeMs: number;
   score: Score;
   bestMove: string | null;
@@ -100,6 +100,7 @@ export interface BenchmarkRow {
 
 export interface BenchmarkResult {
   id: string;
+  appVersion?: string;
   createdAt: string;
   settings: SearchSettings;
   rows: BenchmarkRow[];

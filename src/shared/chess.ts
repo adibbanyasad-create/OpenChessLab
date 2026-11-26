@@ -30,6 +30,14 @@ export function validPosition(fen: string): Chess {
     throw new Error('FEN must be a single printable line.');
   const validation = validateFen(fen);
   if (!validation.ok) throw new Error(validation.error ?? 'Invalid FEN.');
+  const fields = fen.trim().split(/\s+/);
+  if (
+    [fields[4], fields[5]].some(
+      (value) => !Number.isSafeInteger(Number(value)) || Number(value) > LIMITS.fenCounter,
+    )
+  ) {
+    throw new Error(`FEN counters must be integers no greater than ${LIMITS.fenCounter}.`);
+  }
   const chess = new Chess(fen);
   const pieces = chess
     .board()
@@ -43,7 +51,7 @@ export function validPosition(fen: string): Chess {
       throw new Error('Invalid position: a side has too many pieces or pawns for standard chess.');
     }
   }
-  const rights = fen.split(' ')[2] ?? '-';
+  const rights = chess.fen().split(' ')[2] ?? '-';
   for (const [right, color, kingSquare, rookSquare] of [
     ['K', 'w', 'e1', 'h1'],
     ['Q', 'w', 'e1', 'a1'],
@@ -83,6 +91,7 @@ export function parseGame(pgn: string): GameData {
     throw new Error(`Games are limited to ${LIMITS.gamePlies} half-moves.`);
   const initialFen = moves[0]?.before ?? chess.fen();
   validPosition(initialFen);
+  validPosition(chess.fen());
   return {
     headers: chess.getHeaders(),
     pgn: chess.pgn({ maxWidth: 80 }),

@@ -10,6 +10,7 @@ if (!/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(version))
 const filename = `OpenChessLab-${version}.tar.gz`;
 const entries = [
   'src',
+  'AGENTS.md',
   'tests',
   'scripts',
   'docs',
