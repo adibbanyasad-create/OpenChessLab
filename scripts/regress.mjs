@@ -48,7 +48,12 @@ const suiteVersion = Number(flag('suite-version', '1'));
 const depth = Number(flag('depth', '8'));
 const threads = Number(flag('threads', '1'));
 const hash = Number(flag('hash', '16'));
-const server = new URL(flag('server', 'http://127.0.0.1:3001'));
+let server;
+try {
+  server = new URL(flag('server', 'http://127.0.0.1:3001'));
+} catch {
+  server = null;
+}
 const token = flag('token', process.env.OPENCHESSLAB_API_TOKEN ?? '');
 const printBundle = has('print-bundle');
 const asJson = has('json');
@@ -66,26 +71,34 @@ const report = (verdict) => {
 };
 
 /**
- * Validate a downloaded candidate bundle before it is trusted or written.
- * Mirrors scripts/verify-bundle.mjs canonical rules; throws on any mismatch.
+ * Validate a bundle before it is trusted: full shape, suite hash, content
+ * hash, and suite↔rows correspondence. Mirrors verify-bundle.mjs; throws.
  */
-const verifyCandidateBundle = (bundle) => {
-  if (!bundle || typeof bundle !== 'object') throw new Error('Candidate is not a bundle object.');
+const verifyBundleFile = (bundle, label) => {
+  if (!bundle || typeof bundle !== 'object') throw new Error(`${label} is not a bundle object.`);
   if (bundle.format !== 'openchesslab-experiment-bundle' || bundle.bundleVersion !== 1)
-    throw new Error('Candidate is not an experiment bundle v1 file.');
+    throw new Error(`${label} is not an experiment bundle v1 file.`);
   if (typeof bundle.runId !== 'string' || bundle.runId !== bundle.result?.id)
-    throw new Error('Candidate runId does not match its result.id.');
+    throw new Error(`${label} runId does not match its result.id.`);
   if (!Array.isArray(bundle.result?.rows) || !bundle.result.rows.length)
-    throw new Error('Candidate bundle contains no measured rows.');
+    throw new Error(`${label} bundle contains no measured rows.`);
   if (!/^[0-9a-f]{64}$/.test(bundle.sha256 ?? ''))
-    throw new Error('Candidate sha256 is not 64 lowercase hex characters.');
+    throw new Error(`${label} sha256 is not 64 lowercase hex characters.`);
   if (bundle.suite?.sha256) {
     const { id, version, positions } = bundle.suite;
     const suiteHash = createHash('sha256')
       .update(JSON.stringify({ id, version, positions }), 'utf8')
       .digest('hex');
     if (suiteHash !== bundle.suite.sha256)
-      throw new Error('Candidate suite hash does not match its positions.');
+      throw new Error(`${label} suite hash does not match its positions.`);
+    const suiteFens = new Set(positions.map((position) => position?.fen));
+    const rowFens = new Set(bundle.result.rows.map((row) => row?.fen));
+    const missing = [...suiteFens].filter((fen) => !rowFens.has(fen)).length;
+    const extra = [...rowFens].filter((fen) => !suiteFens.has(fen)).length;
+    if (missing || extra)
+      throw new Error(
+        `${label} suite claim does not match measured rows (${missing} missing, ${extra} non-suite).`,
+      );
   }
   const { sha256, ...unsigned } = bundle;
   const payload = JSON.stringify({
@@ -102,7 +115,7 @@ const verifyCandidateBundle = (bundle) => {
     notes: unsigned.notes,
   });
   if (createHash('sha256').update(payload, 'utf8').digest('hex') !== sha256)
-    throw new Error('Candidate content hash mismatch: the download was corrupted or tampered.');
+    throw new Error(`${label} content hash mismatch: the file was corrupted or tampered.`);
   return bundle;
 };
 
@@ -110,15 +123,34 @@ const verifyCandidateBundle = (bundle) => {
 const usage = [];
 if (!baselinePath) usage.push('Missing --baseline <bundle.oclb.json>.');
 if (!engineId) usage.push('Missing --engine <engine-id> (a server-registry id, never a path).');
-if (!['127.0.0.1', 'localhost', '[::1]'].includes(server.hostname))
-  usage.push('Refusing non-loopback --server. Run against a local OpenChessLab instance.');
-if (!['http:', 'https:'].includes(server.protocol)) usage.push('Server URL must be http(s).');
+if (!server) usage.push('--server must be a valid URL (loopback http(s) only).');
+else {
+  if (!['127.0.0.1', 'localhost', '[::1]'].includes(server.hostname))
+    usage.push('Refusing non-loopback --server. Run against a local OpenChessLab instance.');
+  if (!['http:', 'https:'].includes(server.protocol)) usage.push('Server URL must be http(s).');
+}
+if (!Number.isInteger(suiteVersion) || suiteVersion < 1)
+  usage.push('--suite-version must be a positive integer.');
 if (!Number.isInteger(depth) || depth < 1 || depth > 24)
   usage.push('--depth must be an integer 1-24.');
 if (![1, 2, 3, 4].includes(threads)) usage.push('--threads must be 1-4.');
 if (![16, 32, 64, 128, 256, 512].includes(hash)) usage.push('--hash must be 16-512 MB.');
 if (flag('output', undefined) !== undefined)
   usage.push('The --output file flag was removed: use --print-bundle > candidate.oclb.json.');
+if (printBundle && asJson)
+  usage.push(
+    '--print-bundle and --json are mutually exclusive: stdout can carry only one document.',
+  );
+// Fail-open gates are worse than no gates: a bare or misspelled --fail-on
+// must error, never silently run with zero gates.
+if (raw.includes('--fail-on') && !failOn.length)
+  usage.push('--fail-on needs a value: depth-limited, missing-stats, disagreement:<cp>.');
+for (const gate of failOn) {
+  if (gate !== 'depth-limited' && gate !== 'missing-stats' && !/^disagreement:\d+$/.test(gate))
+    usage.push(
+      `Unknown gate "${gate}": use depth-limited, missing-stats, or disagreement:<nonnegative-cp>.`,
+    );
+}
 if (usage.length) {
   report({ exitCode: 2, lines: ['Usage errors:'], failures: usage });
 } else {
@@ -138,9 +170,9 @@ if (usage.length) {
   };
 
   try {
-    const baseline = JSON.parse(await readFile(baselinePath, 'utf8'));
-    if (baseline.format !== 'openchesslab-experiment-bundle' || baseline.bundleVersion !== 1)
-      throw new Error('Baseline is not an experiment bundle v1 file.');
+    // The baseline's rows drive the disagreement gate, so a tampered
+    // baseline must fail here — never silently shift the comparison.
+    const baseline = verifyBundleFile(JSON.parse(await readFile(baselinePath, 'utf8')), 'Baseline');
     if (!baseline.suite || baseline.suite.id !== suiteId || baseline.suite.version !== suiteVersion)
       throw new Error(
         `Baseline suite is ${baseline.suite ? `${baseline.suite.id} v${baseline.suite.version}` : 'custom/none'}; ` +
@@ -168,6 +200,15 @@ if (usage.length) {
       }
     }
     if (job.status === 'running') {
+      // One last status check: the job may have finished between the final
+      // poll and the budget expiry — report its real outcome, not a timeout.
+      try {
+        job = await (await request(`/api/jobs/${created.id}`)).json();
+      } catch {
+        /* fall through to cancellation below */
+      }
+    }
+    if (job.status === 'running') {
       await request(`/api/jobs/${created.id}`, { method: 'DELETE' }).catch(() => undefined);
       throw new Error('Candidate job did not finish within 5 minutes; it was cancelled.');
     }
@@ -176,7 +217,7 @@ if (usage.length) {
     const downloaded = await (await request(`/api/jobs/${created.id}/export?format=bundle`)).json();
     // Verify the downloaded bundle before trusting it: a corrupt or tampered
     // HTTP response must fail here, never pass as a valid experiment record.
-    const candidate = verifyCandidateBundle(downloaded);
+    const candidate = verifyBundleFile(downloaded, 'Candidate');
     lines.push(
       `Candidate: ${candidate.sha256.slice(0, 12)}… (${candidate.result.rows.length} searches)`,
     );

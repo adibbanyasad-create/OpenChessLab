@@ -1,7 +1,13 @@
 import { z } from 'zod';
 import { fenSchema } from './schemas.js';
 import { sha256Hex } from './sha256.js';
-import type { BenchmarkResult, SearchSettings } from './types.js';
+import type {
+  BenchmarkComparison,
+  BenchmarkResult,
+  BenchmarkRow,
+  Score,
+  SearchSettings,
+} from './types.js';
 
 /**
  * ExperimentBundle v1: a self-describing, tamper-evident record of one
@@ -199,13 +205,98 @@ export function bundleSha256(bundle: Omit<ExperimentBundle, 'sha256'>): string {
   return sha256Hex(bundlePayload(bundle));
 }
 
+/** Rebuild a score in canonical key order. */
+function canonicalScore(score: Score): Score {
+  return score.type === 'cp'
+    ? { type: 'cp', value: score.value }
+    : { type: 'mate', value: score.value, winner: score.winner };
+}
+
+/** Rebuild settings in canonical key order, preserving validated extras. */
+function canonicalSettings(settings: SearchSettings): SearchSettings {
+  const { depth, threads, hash, multiPv, options } = settings;
+  return {
+    depth,
+    threads,
+    hash,
+    multiPv,
+    ...(options === undefined ? {} : { options: { ...options } }),
+  };
+}
+
+/** Rebuild one benchmark row in canonical key order. */
+function canonicalRow(row: BenchmarkRow): BenchmarkRow {
+  return {
+    engineId: row.engineId,
+    engineName: row.engineName,
+    position: row.position,
+    fen: row.fen,
+    depth: row.depth,
+    requestedDepth: row.requestedDepth,
+    depthLimited: row.depthLimited,
+    nodes: row.nodes,
+    nps: row.nps,
+    engineTimeMs: row.engineTimeMs,
+    wallTimeMs: row.wallTimeMs,
+    score: canonicalScore(row.score),
+    bestMove: row.bestMove,
+    effectiveOptions: { ...row.effectiveOptions },
+    warnings: [...row.warnings],
+  };
+}
+
+function canonicalComparison(comparison: BenchmarkComparison): BenchmarkComparison {
+  return {
+    meanCp: comparison.meanCp,
+    disagreementCp: comparison.disagreementCp,
+    mateCount: comparison.mateCount,
+    missingScoreCount: comparison.missingScoreCount,
+  };
+}
+
+/**
+ * Rebuild a benchmark result in canonical key order at every level, so the
+ * content hash is stable no matter what key order the producer emitted.
+ * `verifyBundle` re-parses through the same schema, which emits the same
+ * order — that is what makes round-trips verify.
+ */
+export function canonicalResult(result: BenchmarkResult): BenchmarkResult {
+  return {
+    id: result.id,
+    ...(result.appVersion === undefined ? {} : { appVersion: result.appVersion }),
+    createdAt: result.createdAt,
+    settings: canonicalSettings(result.settings),
+    rows: result.rows.map(canonicalRow),
+    ...(result.comparisons === undefined
+      ? {}
+      : {
+          comparisons: Object.fromEntries(
+            Object.entries(result.comparisons).map(([fen, comparison]) => [
+              fen,
+              canonicalComparison(comparison),
+            ]),
+          ),
+        }),
+    ...(result.suite === undefined
+      ? {}
+      : {
+          suite: {
+            id: result.suite.id,
+            version: result.suite.version,
+            sha256: result.suite.sha256,
+          },
+        }),
+    environment: {
+      platform: result.environment.platform,
+      arch: result.environment.arch,
+      cpus: result.environment.cpus,
+      node: result.environment.node,
+    },
+  };
+}
+
 /**
  * Build a bundle from a completed benchmark result. Never invents data.
- *
- * The embedded result is rebuilt in canonical key order so the content hash
- * is stable: JSON key order from different producers must not change the
- * hash of identical content. `verifyBundle` re-parses through the same
- * schema, which emits the same order — that is what makes round-trips verify.
  */
 export function createBundle(
   result: BenchmarkResult,
@@ -222,27 +313,31 @@ export function createBundle(
   const engines = [...new Map(result.rows.map((row) => [row.engineId, row.engineName])).entries()]
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.id.localeCompare(b.id));
-  const canonicalResult: BenchmarkResult = {
-    id: result.id,
-    ...(result.appVersion === undefined ? {} : { appVersion: result.appVersion }),
-    createdAt: result.createdAt,
-    settings: result.settings,
-    rows: result.rows,
-    ...(result.comparisons === undefined ? {} : { comparisons: result.comparisons }),
-    ...(result.suite === undefined ? {} : { suite: result.suite }),
-    environment: result.environment,
-  };
+  if (result.settings.multiPv !== 1)
+    throw new Error('Bundles require single-PV benchmark results (multiPv must be 1).');
+  if (!result.rows.length) throw new Error('Bundles require at least one measured row.');
+  const canonical = canonicalResult(result);
+  // Copy the suite block: aliasing the caller's object would let later
+  // mutations corrupt shared constants (e.g. SUITE_V1.positions).
+  const suite = options.suite
+    ? {
+        id: options.suite.id,
+        version: options.suite.version,
+        sha256: options.suite.sha256,
+        positions: options.suite.positions.map((position) => ({ ...position })),
+      }
+    : null;
   const unsigned = {
     format: 'openchesslab-experiment-bundle' as const,
     bundleVersion: BUNDLE_VERSION,
     runId: result.id,
     appVersion: result.appVersion ?? null,
     createdAt: result.createdAt,
-    suite: options.suite ?? null,
+    suite,
     engines,
-    settings: { ...result.settings, multiPv: 1 as const },
-    environment: { ...result.environment },
-    result: canonicalResult,
+    settings: { ...canonicalSettings(result.settings), multiPv: 1 as const },
+    environment: { ...canonical.environment },
+    result: canonical,
     notes: options.notes ?? null,
   };
   return { ...unsigned, sha256: bundleSha256(unsigned) };
@@ -275,6 +370,53 @@ export function verifyBundle(input: unknown): BundleVerification {
   }
   if (bundle.runId !== bundle.result.id) {
     return { ok: false, errors: ['runId does not match result.id.'] };
+  }
+  if (bundle.suite) {
+    // The suite's own content hash must be valid — otherwise a producer
+    // could ship arbitrary positions under a trusted suite id.
+    const suiteHash = sha256Hex(
+      JSON.stringify({
+        id: bundle.suite.id,
+        version: bundle.suite.version,
+        positions: bundle.suite.positions,
+      }),
+    );
+    if (suiteHash !== bundle.suite.sha256) {
+      return {
+        ok: false,
+        errors: [
+          `Suite sha256 mismatch: claims ${bundle.suite.sha256.slice(0, 12)}… but positions hash to ${suiteHash.slice(0, 12)}….`,
+        ],
+      };
+    }
+    // A suite claim is only meaningful when the measured rows are exactly
+    // the suite's positions. Otherwise anyone could attach Suite v1 to an
+    // unrelated run and it would still "verify".
+    const suiteFens = new Set(bundle.suite.positions.map((position) => position.fen));
+    const rowFens = new Set(bundle.result.rows.map((row) => row.fen));
+    const missing = [...suiteFens].filter((fen) => !rowFens.has(fen));
+    const extra = [...rowFens].filter((fen) => !suiteFens.has(fen));
+    if (missing.length || extra.length) {
+      const details = [
+        ...(missing.length ? [`missing suite positions: ${missing.length}`] : []),
+        ...(extra.length ? [`non-suite positions: ${extra.length}`] : []),
+      ].join('; ');
+      return {
+        ok: false,
+        errors: [
+          `Suite claim does not match measured rows (${details}). A suite bundle must contain exactly the suite positions.`,
+        ],
+      };
+    }
+    const resultSuite = bundle.result.suite;
+    if (
+      resultSuite &&
+      (resultSuite.id !== bundle.suite.id ||
+        resultSuite.version !== bundle.suite.version ||
+        resultSuite.sha256 !== bundle.suite.sha256)
+    ) {
+      return { ok: false, errors: ['Embedded result suite ref disagrees with bundle suite.'] };
+    }
   }
   return { ok: true, bundle };
 }

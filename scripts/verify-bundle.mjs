@@ -32,22 +32,47 @@ if (args.length !== 1) {
   }
   if (bundle !== undefined) {
     const errors = [];
-    if (bundle.format !== 'openchesslab-experiment-bundle')
-      errors.push('format must be "openchesslab-experiment-bundle".');
-    if (bundle.bundleVersion !== 1) errors.push('bundleVersion must be 1.');
-    if (typeof bundle.runId !== 'string') errors.push('runId must be a string.');
-    if (bundle.runId !== bundle.result?.id) errors.push('runId does not match result.id.');
-    if (!/^[0-9a-f]{64}$/.test(bundle.sha256 ?? ''))
-      errors.push('sha256 must be 64 lowercase hex characters.');
-    if (bundle.suite && bundle.suite.sha256) {
+    if (!bundle || typeof bundle !== 'object') errors.push('Bundle must be a JSON object.');
+    else {
+      if (bundle.format !== 'openchesslab-experiment-bundle')
+        errors.push('format must be "openchesslab-experiment-bundle".');
+      if (bundle.bundleVersion !== 1) errors.push('bundleVersion must be 1.');
+      if (typeof bundle.runId !== 'string') errors.push('runId must be a string.');
+      if (bundle.runId !== bundle.result?.id) errors.push('runId does not match result.id.');
+      if (!Array.isArray(bundle.result?.rows) || !bundle.result.rows.length)
+        errors.push('result.rows must be a non-empty array.');
+      if (!Array.isArray(bundle.engines) || !bundle.engines.length)
+        errors.push('engines must be a non-empty array.');
+      if (!/^[0-9a-f]{64}$/.test(bundle.sha256 ?? ''))
+        errors.push('sha256 must be 64 lowercase hex characters.');
+    }
+    if (!errors.length && bundle.suite?.sha256) {
       const { id, version, positions } = bundle.suite;
-      const recomputed = createHash('sha256')
-        .update(JSON.stringify({ id, version, positions }), 'utf8')
-        .digest('hex');
-      if (recomputed !== bundle.suite.sha256)
-        errors.push(
-          `suite sha256 mismatch: claims ${bundle.suite.sha256.slice(0, 12)}… but positions hash to ${recomputed.slice(0, 12)}….`,
-        );
+      if (!Array.isArray(positions) || !positions.length)
+        errors.push('suite.positions must be a non-empty array.');
+      else if (typeof id !== 'string' || typeof version !== 'number')
+        errors.push('suite.id and suite.version must be a string and a number.');
+      else {
+        const recomputed = createHash('sha256')
+          .update(JSON.stringify({ id, version, positions }), 'utf8')
+          .digest('hex');
+        if (recomputed !== bundle.suite.sha256)
+          errors.push(
+            `suite sha256 mismatch: claims ${bundle.suite.sha256.slice(0, 12)}… but positions hash to ${recomputed.slice(0, 12)}….`,
+          );
+      }
+      if (!errors.length) {
+        // A suite claim is only meaningful when the measured rows are
+        // exactly the suite's positions.
+        const suiteFens = new Set(positions.map((position) => position?.fen));
+        const rowFens = new Set(bundle.result.rows.map((row) => row?.fen));
+        const missing = [...suiteFens].filter((fen) => !rowFens.has(fen)).length;
+        const extra = [...rowFens].filter((fen) => !suiteFens.has(fen)).length;
+        if (missing || extra)
+          errors.push(
+            `Suite claim does not match measured rows (${missing} missing, ${extra} non-suite). A suite bundle must contain exactly the suite positions.`,
+          );
+      }
     }
     if (!errors.length) {
       const { sha256, ...unsigned } = bundle;

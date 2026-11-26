@@ -49,6 +49,16 @@ node scripts/verify-bundle.mjs run.oclb.json --json
 Exit 0 means the bundle parses, validates, and matches its checksum. Exit 1
 reports structured errors: wrong format, suite tampering, or content edits.
 
+Verification is strict by design:
+
+- Key order does not matter: producers deep-canonicalize every level, so any
+  emitter's JSON hashes identically.
+- Suite claims are cross-checked: a suite bundle must contain exactly the
+  suite's positions — no missing rows, no extra rows, no renamed positions
+  smuggled under a trusted hash. Custom runs carry a null suite instead.
+- The suite block's own hash is recomputed, and the embedded result's suite
+  ref must agree with the bundle-level suite.
+
 ## Regress an Engine in CI
 
 Engine authors can gate pull requests on stability with the headless CLI:

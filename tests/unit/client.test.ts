@@ -1,6 +1,8 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, followJob, getToken, setToken } from '../../src/client/api';
-import type { Job } from '../../src/shared/types';
+import { suiteLabel } from '../../src/client/pages/Experiments';
+import { SUITE_V1 } from '../../src/shared/suites';
+import type { BenchmarkResult, Job } from '../../src/shared/types';
 
 afterEach(() => {
   setToken('');
@@ -126,4 +128,53 @@ it('surfaces repeated polling failures instead of polling forever', async () => 
   } finally {
     vi.useRealTimers();
   }
+});
+
+describe('experiment suite labels', () => {
+  const base: BenchmarkResult = {
+    id: '00000000-0000-4000-8000-000000000001',
+    createdAt: '2026-11-26T00:00:00.000Z',
+    settings: { depth: 8, threads: 1, hash: 16, multiPv: 1 },
+    environment: { platform: 'linux', arch: 'x64', cpus: 2, node: 'v22.23.1' },
+    rows: SUITE_V1.positions.map((position) => ({
+      engineId: 'fixture',
+      engineName: 'Explicit label fixture',
+      position: position.name,
+      fen: position.fen,
+      depth: 8,
+      requestedDepth: 8,
+      depthLimited: false,
+      nodes: 1,
+      nps: 1,
+      engineTimeMs: 1,
+      wallTimeMs: 1,
+      score: { type: 'cp' as const, value: 0 },
+      bestMove: null,
+      effectiveOptions: {},
+      warnings: [],
+    })),
+  };
+  it('labels fully verified known suites as fact', () => {
+    expect(
+      suiteLabel({
+        ...base,
+        suite: { id: SUITE_V1.id, version: 1, sha256: SUITE_V1.sha256 },
+      }),
+    ).toBe(`Suite openchesslab-suite-v1 v1 / ${SUITE_V1.sha256.slice(0, 12)}…`);
+  });
+  it('marks mismatched or unknown suite claims as unverified', () => {
+    expect(
+      suiteLabel({
+        ...base,
+        rows: base.rows.slice(0, 2),
+        suite: { id: SUITE_V1.id, version: 1, sha256: SUITE_V1.sha256 },
+      }),
+    ).toBe('Suite openchesslab-suite-v1 v1 (claim not verified)');
+    expect(
+      suiteLabel({ ...base, suite: { id: 'future-suite', version: 2, sha256: '0'.repeat(64) } }),
+    ).toBe('Suite future-suite v2 (claim not verified)');
+  });
+  it('labels runs without suite refs as custom', () => {
+    expect(suiteLabel(base)).toBe('Custom positions (no suite)');
+  });
 });
