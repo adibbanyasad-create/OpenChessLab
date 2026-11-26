@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createBundle } from '../../src/shared/bundles';
-import { DEFAULT_POSITION } from '../../src/shared/chess';
 import { SUITE_V1 } from '../../src/shared/suites';
 import type { BenchmarkResult } from '../../src/shared/types';
 
@@ -16,25 +15,30 @@ const fixtureResult = (): BenchmarkResult => ({
   settings: { depth: 8, threads: 1, hash: 16, multiPv: 1 },
   environment: { platform: 'linux', arch: 'x64', cpus: 2, node: 'v22.23.1' },
   suite: { id: SUITE_V1.id, version: SUITE_V1.version, sha256: SUITE_V1.sha256 },
-  rows: [
-    {
-      engineId: 'fixture-engine',
-      engineName: 'Explicit script fixture',
-      position: 'Starting position',
-      fen: DEFAULT_POSITION,
-      depth: 8,
-      requestedDepth: 8,
-      depthLimited: false,
-      nodes: 100,
-      nps: 2000,
-      engineTimeMs: 50,
-      wallTimeMs: 55,
-      score: { type: 'cp', value: 10 },
-      bestMove: 'e2e4',
-      effectiveOptions: { Threads: 1, Hash: 16, MultiPV: 1 },
-      warnings: [],
-    },
-  ],
+  rows: SUITE_V1.positions.map((position) => ({
+    engineId: 'fixture-engine',
+    engineName: 'Explicit script fixture',
+    position: position.name,
+    fen: position.fen,
+    depth: 8,
+    requestedDepth: 8,
+    depthLimited: false,
+    nodes: 100,
+    nps: 2000,
+    engineTimeMs: 50,
+    wallTimeMs: 55,
+    score: { type: 'cp' as const, value: 10 },
+    bestMove: 'e2e4',
+    effectiveOptions: { Threads: 1, Hash: 16, MultiPV: 1 },
+    warnings: [],
+  })),
+});
+
+const fullSuite = () => ({
+  id: SUITE_V1.id,
+  version: SUITE_V1.version,
+  sha256: SUITE_V1.sha256,
+  positions: SUITE_V1.positions,
 });
 
 const runVerifier = (bundle: unknown, extra: string[] = []) => {
@@ -67,7 +71,7 @@ describe('standalone bundle verifier script', () => {
     const bundle = createBundle(withoutSuite, { suite: null });
     const result = runVerifier(bundle, ['--json']);
     expect(result.status, result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, suite: null, rows: 1 });
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, suite: null, rows: 3 });
   });
   it('rejects tampered content with a hash mismatch', () => {
     const bundle = createBundle(fixtureResult(), { suite: null });
@@ -100,5 +104,31 @@ describe('standalone bundle verifier script', () => {
     });
     expect(missing.status).toBe(1);
     expect(missing.stderr).toContain('Could not read');
+  });
+  it('rejects suite claims that do not match measured rows', () => {
+    const partial = fixtureResult();
+    partial.rows = partial.rows.slice(0, 2);
+    const bundle = createBundle(partial, { suite: fullSuite() });
+    const result = runVerifier(bundle);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('does not match measured rows');
+  });
+  it('rejects structurally broken bundles without crashing', () => {
+    for (const broken of [
+      { format: 'openchesslab-experiment-bundle', bundleVersion: 1 },
+      { format: 'openchesslab-experiment-bundle', bundleVersion: 1, result: { rows: [] } },
+      {
+        format: 'openchesslab-experiment-bundle',
+        bundleVersion: 1,
+        result: { rows: [null] },
+        suite: { sha256: '0'.repeat(64), positions: 'nope' },
+      },
+      [1, 2, 3],
+      'just a string',
+    ]) {
+      const result = runVerifier(broken);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('error:');
+    }
   });
 });

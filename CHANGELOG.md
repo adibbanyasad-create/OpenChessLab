@@ -13,6 +13,15 @@ Meaningful changes are recorded here. Source publication and a tagged GitHub rel
 - Copy-paste GitHub Actions workflow for engine repos (`examples/engine-regression.yml`) with pinned actions and candidate-bundle upload.
 - Reproducibility guide, UCI pitfalls guide for engine authors, and 0.5 migration notes, all linked from the in-app documentation.
 
+### Fixed
+
+- Bundle verification is order-independent: results are deep-canonicalized at every nesting level, so any producer's key order hashes identically.
+- Suite claims are cross-checked against measured rows in `verifyBundle`, the standalone verifier, and the regression CLI. False suite attachments no longer verify.
+- The regression CLI verifies the baseline bundle (shape, suite, and content hash) before trusting its rows for disagreement gates.
+- The regression CLI fails closed on bare/unknown `--fail-on` gates, malformed `--server` URLs, and contradictory `--print-bundle --json` output modes.
+- The UI attaches and labels Suite v1 only when the stored ref and measured rows fully agree; unknown claims are labeled unverified.
+- `createBundle` copies the suite block instead of aliasing caller state, and refuses multi-PV or rowless results instead of rewriting them.
+
 ### Compatibility
 
 `BenchmarkResult` may include an optional `suite` reference. Export adds `format=bundle` for benchmarks (reviews reject it with 409). These additions are backward compatible for consumers that tolerate optional fields. See [migration notes](docs/migration-0.5.md).

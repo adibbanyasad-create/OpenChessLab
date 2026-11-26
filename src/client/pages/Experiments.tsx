@@ -18,7 +18,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { formatScore, scoreDisagreementCp, validPosition } from '../../shared/chess';
-import { SUITE_V1 } from '../../shared/suites';
+import { SUITE_V1, matchesSuite } from '../../shared/suites';
 import { benchmarkCsv } from '../../shared/csv';
 import { createBundle } from '../../shared/bundles';
 import type { BenchmarkResult, EngineDescriptor, SearchSettings } from '../../shared/types';
@@ -537,8 +537,19 @@ export function Experiments({
               title="Download a tamper-evident experiment bundle (.oclb.json) with suite identity, settings, and a SHA-256 checksum."
               onClick={() => {
                 if (result) {
+                  // Attach Suite v1 only when the stored ref AND the measured
+                  // rows agree: a corrupt history entry must never produce a
+                  // bundle with a false suite claim.
+                  const rowPositions = [
+                    ...new Map(
+                      result.rows.map((row) => [row.fen, { name: row.position, fen: row.fen }]),
+                    ).values(),
+                  ];
                   const suite =
-                    result.suite?.id === SUITE_V1.id && result.suite.version === SUITE_V1.version
+                    result.suite?.id === SUITE_V1.id &&
+                    result.suite.version === SUITE_V1.version &&
+                    result.suite.sha256 === SUITE_V1.sha256 &&
+                    matchesSuite(SUITE_V1, rowPositions)
                       ? SUITE_V1
                       : null;
                   downloadFile(
@@ -579,11 +590,7 @@ export function Experiments({
           <div className="result-context">
             <span>{job.busy ? 'Showing a previous completed run' : 'Completed run'}</span>
             <time dateTime={result.createdAt}>{new Date(result.createdAt).toLocaleString()}</time>
-            <span className="muted">
-              {result.suite
-                ? `Suite ${result.suite.id} v${result.suite.version} / ${result.suite.sha256.slice(0, 12)}…`
-                : 'Custom positions (no suite)'}
-            </span>
+            <span className="muted">{suiteLabel(result)}</span>
           </div>
         )}
         <div className="table-scroll" role="region" aria-label="Engine search results" tabIndex={0}>
@@ -694,6 +701,22 @@ export function Experiments({
       )}
     </div>
   );
+}
+
+/**
+ * Suite label: fully verified only for suites this client knows. Unknown or
+ * mismatched claims are labeled as unverified rather than shown as fact.
+ */
+export function suiteLabel(result: BenchmarkResult): string {
+  if (!result.suite) return 'Custom positions (no suite)';
+  const rowPositions = [
+    ...new Map(result.rows.map((row) => [row.fen, { name: row.position, fen: row.fen }])).values(),
+  ];
+  const known = result.suite.id === SUITE_V1.id && result.suite.version === SUITE_V1.version;
+  if (known && result.suite.sha256 === SUITE_V1.sha256 && matchesSuite(SUITE_V1, rowPositions)) {
+    return `Suite ${result.suite.id} v${result.suite.version} / ${result.suite.sha256.slice(0, 12)}…`;
+  }
+  return `Suite ${result.suite.id} v${result.suite.version} (claim not verified)`;
 }
 
 function Metric({
