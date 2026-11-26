@@ -1,6 +1,13 @@
 import { availableParallelism, arch, platform } from 'node:os';
 import { performance } from 'node:perf_hooks';
-import { classifyMove, meanScoreCp, scoreDisagreementCp } from '../shared/chess.js';
+import {
+  classifyMove,
+  gamePhase,
+  meanScoreCp,
+  reviewAccuracy,
+  scoreDisagreementCp,
+} from '../shared/chess.js';
+import { openingFromMoves } from '../shared/openings.js';
 import type { AnalysisRequest, BenchmarkRequest, ReviewRequest } from '../shared/schemas.js';
 import type { BenchmarkResult, GameData, JobProgress, ReviewResult } from '../shared/types.js';
 import type { EngineConfig } from './config.js';
@@ -50,6 +57,7 @@ export async function reviewGame(
   };
   try {
     await engine.start(request, signal);
+    const opening = openingFromMoves(game.moves);
     let previous: Awaited<ReturnType<UciEngine['analyze']>> | undefined;
     for (const [ply, fen] of game.positions.entries()) {
       signal.throwIfAborted();
@@ -73,21 +81,66 @@ export async function reviewGame(
         // their requested depth. Otherwise report the move as uncertain instead of
         // inventing a blunder/mistake from a timed-out search.
         const uncertain = previous.depthLimited || analysis.depthLimited;
+        const before = previous.lines[0]!.score;
+        const mateOpportunityMissed =
+          before.type === 'mate' && before.winner === move.color && score.type !== 'mate';
+        const sacrifice =
+          !uncertain &&
+          previous.bestMove === uci &&
+          before.type === 'cp' &&
+          score.type === 'cp' &&
+          Math.abs(score.value) > 150 &&
+          (move.san.includes('x') || move.san.includes('+'));
         result.annotations.push({
           ply,
           san: move.san,
           bestMove: previous.bestMove,
-          ...classifyMove(
-            previous.lines[0]!.score,
-            score,
-            move.color,
-            previous.bestMove === uci,
-            uncertain,
-          ),
+          phase: gamePhase(ply, game.positions.length - 1),
+          bookMove: ply <= (opening?.plies ?? 0),
+          ...classifyMove(before, score, move.color, previous.bestMove === uci, uncertain, {
+            bookMove: ply <= (opening?.plies ?? 0),
+            mateOpportunityMissed,
+            sacrifice,
+          }),
         });
       }
       previous = analysis;
     }
+    const summarize = (color: 'w' | 'b') => {
+      const moves = result.annotations.filter((_, index) => game.moves[index]?.color === color);
+      const losses = moves.map((annotation) => annotation.lossCp);
+      const counts = {
+        brilliant: 0,
+        great: 0,
+        best: 0,
+        excellent: 0,
+        good: 0,
+        book: 0,
+        inaccuracy: 0,
+        mistake: 0,
+        miss: 0,
+        blunder: 0,
+      };
+      for (const annotation of moves) counts[annotation.classification]++;
+      const confident = losses.filter((loss): loss is number => loss !== null);
+      return {
+        color,
+        moves: moves.length,
+        confidentMoves: confident.length,
+        uncertainMoves: moves.length - confident.length,
+        averageLossCp: confident.length
+          ? Math.round((confident.reduce((sum, loss) => sum + loss, 0) / confident.length) * 10) /
+            10
+          : null,
+        accuracy: reviewAccuracy(losses),
+        counts,
+      };
+    };
+    result.summary = {
+      ...(opening ? { opening } : {}),
+      white: summarize('w'),
+      black: summarize('b'),
+    };
     result.elapsedMs = Math.round(performance.now() - started);
     return result;
   } finally {

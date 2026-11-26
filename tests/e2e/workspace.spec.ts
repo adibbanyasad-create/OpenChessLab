@@ -191,7 +191,21 @@ test('reviews a real game and visualizes its measured turning points', async ({ 
   );
   await expect(page.getByRole('img', { name: /Game evaluation by half-move/ })).toBeVisible();
   await expect(page.locator('.review-summary')).toContainText('blunders');
+  await expect(page.locator('.review-report')).toContainText('accuracy');
+  await expect(page.locator('.review-opening')).toBeVisible();
   await expect(page.locator('.error-message')).toHaveCount(0);
+  const optionsResponse = await page.request.get('/api/engines/stockfish-lite/options');
+  expect(optionsResponse.ok()).toBe(true);
+  const optionsBody = (await optionsResponse.json()) as {
+    options: { name: string }[];
+  };
+  expect(optionsBody.options.map((option) => option.name)).toContain('Threads');
+  const hardwareResponse = await page.request.get('/api/hardware/recommendations');
+  expect(hardwareResponse.ok()).toBe(true);
+  await page.getByText('Advanced settings', { exact: true }).click();
+  await expect(page.getByText('Recommended for this machine')).toBeVisible();
+  await page.getByText('Engine options', { exact: true }).click();
+  await expect(page.getByText('Only advertised options are sent.')).toBeVisible();
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export review CSV' }).click();
   const download = await downloadPromise;
@@ -243,6 +257,12 @@ test('compares two real engines and exports measured JSON and CSV', async ({ pag
 test('runs a real benchmark on a custom FEN entered in the interface', async ({ page }) => {
   await pauseAnalysis(page);
   await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
+  await page.getByRole('button', { name: 'Connect another UCI engine' }).click();
+  await expect(page.getByRole('heading', { name: 'Add your engine safely' })).toBeVisible();
+  await page.getByLabel('Absolute executable path').fill('relative/engine');
+  await page.getByRole('button', { name: 'Copy entry' }).click();
+  await expect(page.getByRole('alert')).toContainText('absolute executable path');
+  await page.keyboard.press('Escape');
   await page.getByLabel('Position suite').selectOption('custom');
   await page.getByLabel('Custom position FEN').fill('invalid FEN');
   await page.getByLabel('Custom position name').fill('Custom endgame');

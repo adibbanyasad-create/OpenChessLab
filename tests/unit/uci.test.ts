@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseInfo, UciEngine } from '../../src/server/uci';
+import { parseInfo, parseUciOption, UciEngine, validateCustomOption } from '../../src/server/uci';
 import { DEFAULT_POSITION } from '../../src/shared/chess';
 
 const fixture = (mode = 'normal') =>
@@ -106,6 +106,65 @@ describe('UCI info parsing', () => {
       value: 0,
       winner: 'w',
     });
+  });
+});
+
+describe('UCI option discovery', () => {
+  it('parses spin, check, combo, string, and button options', () => {
+    expect(parseUciOption('option name Threads type spin default 1 min 1 max 512')).toEqual({
+      name: 'Threads',
+      option: { type: 'spin', value: 1, min: 1, max: 512 },
+    });
+    expect(parseUciOption('option name Ponder type check default false')).toEqual({
+      name: 'Ponder',
+      option: { type: 'check', value: false },
+    });
+    expect(
+      parseUciOption('option name Style type combo default Solid var Solid var Normal var Risky'),
+    ).toEqual({
+      name: 'Style',
+      option: { type: 'combo', value: 'Solid', choices: ['Solid', 'Normal', 'Risky'] },
+    });
+    expect(parseUciOption('option name SyzygyPath type string default <empty>')).toEqual({
+      name: 'SyzygyPath',
+      option: { type: 'string', value: '<empty>' },
+    });
+    expect(parseUciOption('option name Clear Hash type button')).toEqual({
+      name: 'Clear Hash',
+      option: { type: 'button' },
+    });
+  });
+
+  it('rejects malformed or unbounded option advertisements', () => {
+    expect(parseUciOption('option name Threads type spin default 1 min 8 max 2')).toBeUndefined();
+    expect(parseUciOption('option name Ponder type check default maybe')).toBeUndefined();
+    expect(
+      parseUciOption('option name Style type combo default Missing var Solid'),
+    ).toBeUndefined();
+    expect(parseUciOption(`option name ${'x'.repeat(300)} type button`)).toBeUndefined();
+    expect(parseUciOption('option name Mystery type unknown default 1')).toBeUndefined();
+  });
+
+  it('validates custom values against advertised ranges and choices', () => {
+    const spin = { type: 'spin', value: 1, min: 1, max: 4 } as const;
+    expect(validateCustomOption('Threads', spin, 2)).toEqual({
+      command: 'setoption name Threads value 2',
+      value: 2,
+    });
+    expect(typeof validateCustomOption('Threads', spin, 99)).toBe('string');
+    expect(
+      typeof validateCustomOption(
+        'Style',
+        { type: 'combo', value: 'Solid', choices: ['Solid', 'Risky'] },
+        'Unknown',
+      ),
+    ).toBe('string');
+    expect(typeof validateCustomOption('Clear Hash', { type: 'button' }, 'anything')).toBe(
+      'string',
+    );
+    expect(typeof validateCustomOption('Path', { type: 'string', value: '' }, 'bad\nvalue')).toBe(
+      'string',
+    );
   });
 });
 

@@ -185,25 +185,83 @@ export function scoreDescription(score?: Score): string {
   return `${side} ${Math.abs(score.value) < 90 ? 'is slightly better' : Math.abs(score.value) < 220 ? 'has an advantage' : 'is winning'}`;
 }
 
+export interface ReviewClassificationInput {
+  before: Score;
+  after: Score;
+  color: 'w' | 'b';
+  playedBest?: boolean;
+  uncertain?: boolean;
+  bookMove?: boolean;
+  mateOpportunityMissed?: boolean;
+  sacrifice?: boolean;
+}
+
 export function classifyMove(
   before: Score,
   after: Score,
   color: 'w' | 'b',
   playedBest = false,
   uncertain = false,
+  details: Pick<ReviewClassificationInput, 'bookMove' | 'mateOpportunityMissed' | 'sacrifice'> = {},
 ): { classification: Classification; lossCp: number | null; uncertain: boolean } {
   const loss = Math.max(
     0,
     Math.round((scoreCp(before) - scoreCp(after)) * (color === 'w' ? 1 : -1)),
   );
-  if (playedBest) return { classification: 'best', lossCp: 0, uncertain };
+  if (details.bookMove) return { classification: 'book', lossCp: 0, uncertain };
+  if (playedBest) {
+    return {
+      classification: details.sacrifice ? 'brilliant' : 'best',
+      lossCp: 0,
+      uncertain,
+    };
+  }
   if (uncertain) return { classification: 'good', lossCp: null, uncertain: true };
+  if (details.mateOpportunityMissed && loss >= 100) {
+    return { classification: 'miss', lossCp: loss, uncertain: false };
+  }
+  if (loss === 0 && details.sacrifice) {
+    return { classification: 'great', lossCp: loss, uncertain: false };
+  }
   return {
     lossCp: loss,
     uncertain: false,
     classification:
-      loss >= 200 ? 'blunder' : loss >= 100 ? 'mistake' : loss >= 50 ? 'inaccuracy' : 'good',
+      loss >= 300
+        ? 'blunder'
+        : loss >= 150
+          ? details.mateOpportunityMissed
+            ? 'miss'
+            : 'mistake'
+          : loss >= 70
+            ? 'inaccuracy'
+            : loss >= 25
+              ? 'excellent'
+              : loss >= 10
+                ? 'good'
+                : 'great',
   };
+}
+
+export function moveAccuracy(lossCp: number | null, alpha = 0.004): number | null {
+  // A transparent exponential accuracy model. Lower expected loss means higher
+  // accuracy. This is an OpenChessLab heuristic, not chess.com's proprietary score.
+  if (lossCp === null) return null;
+  return Number((100 * Math.exp(-alpha * Math.max(0, lossCp))).toFixed(1));
+}
+
+export function reviewAccuracy(losses: (number | null)[], alpha = 0.004): number | null {
+  const confident = losses.filter((loss): loss is number => loss !== null);
+  if (!confident.length) return null;
+  const mean = confident.reduce((sum, loss) => sum + loss, 0) / confident.length;
+  return moveAccuracy(mean, alpha);
+}
+
+export function gamePhase(ply: number, totalPlies: number): 'opening' | 'middlegame' | 'endgame' {
+  const fraction = totalPlies <= 0 ? 0 : ply / totalPlies;
+  if (ply <= 16 || fraction < 0.3) return 'opening';
+  if (fraction < 0.7) return 'middlegame';
+  return 'endgame';
 }
 
 export function squareName(file: number, rank: number): Square {

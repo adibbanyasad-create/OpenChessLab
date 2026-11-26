@@ -53,6 +53,7 @@ import { EnginePanel } from './components/EnginePanel';
 import { MoveList } from './components/MoveList';
 import { EvaluationChart } from './components/EvaluationChart';
 import { ImportDialog } from './components/ImportDialog';
+import { EngineGuideDialog } from './components/EngineGuideDialog';
 import { Modal } from './components/Modal';
 const Experiments = lazy(() =>
   import('./pages/Experiments').then((page) => ({ default: page.Experiments })),
@@ -62,7 +63,7 @@ const Documentation = lazy(() =>
 );
 
 type View = 'analysis' | 'compare' | 'benchmark' | 'docs';
-type Dialog = 'import' | 'fen' | 'shortcuts' | 'connection' | 'game' | 'new' | null;
+type Dialog = 'import' | 'fen' | 'shortcuts' | 'connection' | 'game' | 'new' | 'engine' | null;
 const navigation = [
   { id: 'analysis', label: 'Analysis board', icon: LayoutGrid },
   { id: 'compare', label: 'Engine arena', icon: GitCompareArrows },
@@ -122,7 +123,10 @@ export function App() {
   const chess = new Chess(fen);
   const isSample = game.headers.Event === 'A Night at the Opera';
   const review = reviewedPgn === game.pgn ? reviewJob.job?.result : undefined;
-  const searchKey = `${fen}|${engineId}|${settings.depth}|${settings.threads}|${settings.hash}|${settings.multiPv}`;
+  const customOptionsKey = JSON.stringify(
+    Object.entries(settings.options ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+  );
+  const searchKey = `${fen}|${engineId}|${settings.depth}|${settings.threads}|${settings.hash}|${settings.multiPv}|${customOptionsKey}`;
   const result =
     searchedKey === searchKey && analysis.job?.result?.fen === fen
       ? analysis.job.result
@@ -757,6 +761,7 @@ export function App() {
                 engines={engines}
                 fen={fen}
                 onDocs={() => openDocs(view === 'benchmark' ? 'benchmarking' : 'configuration')}
+                onAddEngine={() => setDialog('engine')}
               />
             )}
           </Suspense>
@@ -801,6 +806,7 @@ export function App() {
           }}
         />
       )}
+      {dialog === 'engine' && <EngineGuideDialog onClose={() => setDialog(null)} />}
       {dialog === 'new' && (
         <Modal
           title="A fresh perspective"

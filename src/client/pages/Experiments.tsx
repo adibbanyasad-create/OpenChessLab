@@ -36,11 +36,13 @@ export function Experiments({
   engines,
   fen,
   onDocs,
+  onAddEngine,
 }: {
   mode: 'compare' | 'benchmark';
   engines: EngineDescriptor[];
   fen: string;
   onDocs: () => void;
+  onAddEngine: () => void;
 }) {
   const [selected, setSelected] = useState(['stockfish-lite', 'stockfish']);
   const [suite, setSuite] = useState(mode === 'benchmark' ? 'standard' : 'current');
@@ -172,7 +174,7 @@ export function Experiments({
                 </label>
               ))}
             </div>
-            <button className="text-button add-engine" onClick={onDocs}>
+            <button className="text-button add-engine" onClick={onAddEngine}>
               <Plus size={14} />
               Connect another UCI engine
               <ArrowUpRight size={13} />

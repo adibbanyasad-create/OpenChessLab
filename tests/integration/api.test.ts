@@ -69,6 +69,29 @@ describe('HTTP API and security boundaries', () => {
     expect(response.body).not.toContain('command');
     expect(response.body).not.toContain(process.execPath);
   });
+  it('discovers advertised engine options without exposing executable paths', async () => {
+    const response = await app.inject('/api/engines/stockfish-lite/options');
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.id).toBe('stockfish-lite');
+    expect(body.name).toContain('Stockfish');
+    const names = body.options.map((option: { name: string }) => option.name);
+    expect(names).toContain('Threads');
+    expect(names).toContain('Hash');
+    expect(names).toContain('MultiPV');
+    expect(response.body).not.toContain(process.execPath);
+    expect((await app.inject('/api/engines/unknown/options')).statusCode).toBe(400);
+  });
+  it('recommends conservative hardware settings with explanations', async () => {
+    const response = await app.inject('/api/hardware/recommendations');
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.threads).toBeGreaterThanOrEqual(1);
+    expect(body.threads).toBeLessThanOrEqual(4);
+    expect([16, 32, 64, 128, 256, 512]).toContain(body.hashMb);
+    expect(body.logicalCpus).toBeGreaterThanOrEqual(1);
+    expect(body.reasons.length).toBeGreaterThan(0);
+  });
   it('parses a PGN through the API', async () => {
     const response = await app.inject({
       method: 'POST',
@@ -299,6 +322,10 @@ describe('actual Stockfish jobs', () => {
     expect(blunder?.classification).toBe('blunder');
     expect(blunder?.lossCp).toBeGreaterThanOrEqual(200);
     expect(blunder?.uncertain).toBe(false);
+    expect(result.summary?.white.moves).toBe(2);
+    expect(result.summary?.black.moves).toBe(2);
+    expect(result.summary?.white.accuracy).toBeGreaterThanOrEqual(0);
+    expect(result.summary?.white.accuracy).toBeLessThanOrEqual(100);
     const csv = await app.inject(`/api/jobs/${job.id}/export?format=csv`);
     expect(csv.statusCode).toBe(200);
     expect(csv.headers['content-type']).toContain('text/csv');

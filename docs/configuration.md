@@ -36,9 +36,28 @@ Use `engines.example.json` as a starting point:
 ]
 ```
 
-Only an administrator with server filesystem access can edit this file. Browser requests select an ID; they never supply commands, paths, arguments, or raw UCI. Command paths must be absolute. On Windows, JSON backslashes must be escaped. An engine ID is a lowercase alphanumeric/hyphen string, at most 64 characters; IDs must be unique and cannot replace built-in IDs.
+Only an administrator with server filesystem access can edit this file. Browser requests select an ID; they never supply commands, paths, arguments, or raw UCI. Command paths must be absolute. On Windows, JSON backslashes must be escaped, so `C:\Engines\my-engine.exe` becomes `C:\\Engines\\my-engine.exe`. An engine ID is a lowercase alphanumeric/hyphen string, at most 64 characters; IDs must be unique and cannot replace built-in IDs.
+
+The Engine arena's **Connect another UCI engine** button opens a guided dialog that validates the display name and absolute path, generates the registry JSON, and explains where to save it. That dialog never uploads or executes files; it only helps a trusted local operator write correct server configuration. Browser-based `.exe` upload-and-execution is intentionally not supported because it would be remote-code-execution by design.
 
 The registry allows at most eight additional engines. The executable must understand `uci`, `isready`, `ucinewgame`, `position fen`, `go depth ... movetime ...`, and `quit`, and return standard scored principal variations plus a legal `bestmove`. Optional statistics can arrive in separate `info` messages and are null when unreported. Numeric fields must be valid, bounded decimal integers. An engine omitting `Threads`, `Hash`, or `MultiPV` receives no corresponding setoption command, and the result records the missing option. Reported numeric ranges are respected rather than silently clamped.
+
+## Engine Options and Hardware Guidance
+
+`GET /api/engines/:id/options` starts the selected engine briefly, reads its advertised UCI options, then shuts it down. Returned option types are `spin`, `check`, `combo`, `string`, and `button`, with advertised defaults, ranges, and choices. Executable paths and arguments are never returned. This endpoint is rate-limited because every call starts a real engine process.
+
+Analysis, review, and benchmark requests accept an optional `options` object with at most 32 entries. Only advertised non-core options are sent:
+
+- `spin` values must be integers within the engine's advertised range.
+- `check` values must be booleans.
+- `combo` values must exactly match an advertised choice.
+- `string` values must be one line of at most 256 characters.
+- `button` options cannot be assigned.
+- Unknown options are ignored with a warning, not executed.
+
+Core Threads/Hash/MultiPV remain separate validated settings and cannot be overridden through this object.
+
+`GET /api/hardware/recommendations` reads logical CPU count and installed RAM from the server and suggests conservative starting Threads/Hash values within application limits. It reserves one CPU for the interface and operating system and keeps hash near or below one-eighth of detected RAM. These are transparent starting points with written reasons, not measured optimal settings and not a performance guarantee. The analysis panel can apply them with one click; every applied value remains editable and is validated again before use.
 
 ```bash
 ENGINES_CONFIG=/absolute/path/to/engines.local.json npm start

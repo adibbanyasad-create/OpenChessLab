@@ -11,8 +11,10 @@ import { benchmarkCsv, reviewCsv } from '../shared/csv.js';
 import type { BenchmarkResult, ReviewResult } from '../shared/types.js';
 import { loadConfig, loadEngines, type EngineConfig, type ServerConfig } from './config.js';
 import { AppError } from './errors.js';
+import { recommendHardware } from './hardware.js';
 import { JobManager } from './jobs.js';
 import { analyzePosition, reviewGame, runBenchmark } from './tasks.js';
+import { UciEngine } from './uci.js';
 import { APP_VERSION } from './version.js';
 
 export function hostAllowed(host: string, allowed: string[]): boolean {
@@ -186,6 +188,30 @@ export async function createApp(
   app.get('/api/engines', async () => ({
     engines: engines.map(({ id, name, description, kind }) => ({ id, name, description, kind })),
   }));
+  app.get('/api/hardware/recommendations', async () => recommendHardware());
+  app.get('/api/engines/:id/options', costly, async (request) => {
+    const { id } = z.object({ id: z.string().min(1).max(64) }).parse(request.params);
+    const engine = lookupEngine(id);
+    const probe = new UciEngine(engine);
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20_000);
+      try {
+        await probe.start({ depth: 1, threads: 1, hash: 16, multiPv: 1 }, controller.signal);
+        return { id: engine.id, ...probe.capabilities() };
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(
+        502,
+        'The engine did not respond to option discovery. Check the server-side engine configuration.',
+      );
+    } finally {
+      await probe.close();
+    }
+  });
 
   app.post('/api/games/parse', async (request) => {
     const { pgn } = z.object({ pgn: pgnSchema }).strict().parse(request.body);

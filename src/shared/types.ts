@@ -1,6 +1,16 @@
 export type Score =
   { type: 'cp'; value: number } | { type: 'mate'; value: number; winner: 'w' | 'b' };
-export type Classification = 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder';
+export type Classification =
+  | 'brilliant'
+  | 'great'
+  | 'best'
+  | 'excellent'
+  | 'good'
+  | 'book'
+  | 'inaccuracy'
+  | 'mistake'
+  | 'miss'
+  | 'blunder';
 
 export interface GameMove {
   ply: number;
@@ -28,11 +38,34 @@ export interface EngineDescriptor {
   kind: 'wasm' | 'native';
 }
 
+export type UciOption =
+  | { name: string; type: 'spin'; value: number; min: number; max: number }
+  | { name: string; type: 'check'; value: boolean }
+  | { name: string; type: 'combo'; value: string; choices: string[] }
+  | { name: string; type: 'string'; value: string }
+  | { name: string; type: 'button' };
+
+export interface EngineCapabilities {
+  id: string;
+  name: string;
+  options: UciOption[];
+  warnings: string[];
+}
+
 export interface SearchSettings {
   depth: number;
   threads: number;
   hash: number;
   multiPv: number;
+  options?: Record<string, string | number | boolean>;
+}
+
+export interface HardwareRecommendation {
+  threads: number;
+  hashMb: number;
+  logicalCpus: number;
+  totalMemoryMb: number | null;
+  reasons: string[];
 }
 
 export interface EngineLine {
@@ -71,6 +104,24 @@ export interface ReviewAnnotation {
   lossCp: number | null;
   bestMove: string | null;
   uncertain: boolean;
+  phase: 'opening' | 'middlegame' | 'endgame';
+  bookMove: boolean;
+}
+
+export interface ReviewPlayerSummary {
+  color: 'w' | 'b';
+  moves: number;
+  confidentMoves: number;
+  uncertainMoves: number;
+  averageLossCp: number | null;
+  accuracy: number | null;
+  counts: Record<Classification, number>;
+}
+
+export interface ReviewSummary {
+  opening?: { name: string; eco?: string; plies: number };
+  white: ReviewPlayerSummary;
+  black: ReviewPlayerSummary;
 }
 
 export interface ReviewResult {
@@ -78,6 +129,7 @@ export interface ReviewResult {
   settings: SearchSettings;
   scores: { ply: number; score: Score; depth: number | null; depthLimited: boolean }[];
   annotations: ReviewAnnotation[];
+  summary?: ReviewSummary;
   elapsedMs: number;
 }
 

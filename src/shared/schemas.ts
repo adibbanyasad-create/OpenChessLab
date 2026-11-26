@@ -13,11 +13,34 @@ export const engineIdSchema = z
   .min(1)
   .max(64)
   .regex(/^[a-z0-9-]+$/);
+const customOptionValue = z.union([
+  z.number().int().min(-1_000_000_000).max(1_000_000_000),
+  z.boolean(),
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(256)
+    .regex(/^[^\r\n\0]*$/),
+]);
+const customOptionsSchema = z
+  .record(
+    z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .regex(/^[^\r\n\0]*$/),
+    customOptionValue,
+  )
+  .refine((options) => Object.keys(options).length <= 32, 'At most 32 custom UCI options.')
+  .optional();
 const settingsShape = {
   depth: z.number().int().min(1).max(LIMITS.maxDepth).default(14),
   threads: z.number().int().min(1).max(LIMITS.maxThreads).default(1),
   hash: z.number().int().min(16).max(LIMITS.maxHash).default(64),
   multiPv: z.number().int().min(1).max(5).default(3),
+  options: customOptionsSchema,
 };
 
 export const analysisSchema = z

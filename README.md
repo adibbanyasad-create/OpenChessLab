@@ -47,9 +47,9 @@ Open **http://localhost:5173**. Vite proxies `/api` to the local engine service.
 - **Benchmark honestly:** sequential searches, per-position UCI state resets, environment metadata, measured search wall time, engine-reported nodes and NPS, custom FEN positions, and JSON/CSV exports. No scores appear until an experiment completes.
 - **Keep your work:** restore the active game and up to 20 validated benchmark records from browser storage. Historical rows retain the engine name/version actually reported during the run. Export PGN, FEN, JSON, and CSV; clear benchmark history independently of your game.
 
-The [verification report](docs/verification.md) records observed checks and their scope, with the initial report preserved separately. Current hosted checks are available in the repository's [Actions tab](https://github.com/adibbanyasad-create/OpenChessLab/actions). A passing workflow is not evidence of a production deployment.
+The [verification report](docs/verification.md) records observed checks and their scope, with earlier reports preserved separately. Current hosted checks are available in the repository's [Actions tab](https://github.com/adibbanyasad-create/OpenChessLab/actions). A passing workflow is not evidence of a production deployment.
 
-Upgrading an API client? Read the [0.3 migration notes](docs/migration-0.3.md) and the earlier [0.2 migration notes](docs/migration-0.2.md): uncertain review losses are null, and benchmark comparisons are optional additive metadata.
+Upgrading an API client? Read the [0.4 migration notes](docs/migration-0.4.md) and earlier migration guides: review labels/summaries are expanded, engine options are additive, and uncertain data remains explicit.
 
 ## A Deliberately Small Architecture
 

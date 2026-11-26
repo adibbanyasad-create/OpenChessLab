@@ -10,6 +10,10 @@ Request schemas are exported from `src/shared/schemas.ts`. Response interfaces a
 
 `GET /api/engines` returns `{ engines: [...] }` with ID, name, description, and kind (`wasm` or `native`). Executable paths and arguments are never returned.
 
+`GET /api/engines/:id/options` returns the runtime engine name, up to 128 advertised UCI options, and startup warnings. A nonresponsive engine returns 502 with a sanitized message. Unknown engine IDs return 400.
+
+`GET /api/hardware/recommendations` returns conservative suggested Threads/Hash values, detected CPU/RAM facts, and written reasons. Unknown memory produces a conservative default, not an invented capacity.
+
 ## PGN Parsing
 
 `POST /api/games/parse`

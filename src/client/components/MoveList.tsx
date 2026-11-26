@@ -100,13 +100,19 @@ export function MoveList({
                     {annotation?.uncertain && <span className="move-annotation uncertain">~</span>}
                     {annotation &&
                       !annotation.uncertain &&
-                      ['blunder', 'mistake', 'inaccuracy'].includes(annotation.classification) && (
-                        <span className="move-annotation">
+                      annotation.classification !== 'good' &&
+                      annotation.classification !== 'book' && (
+                        <span className={`move-annotation ${annotation.classification}`}>
                           {annotation.classification === 'blunder'
                             ? '??'
-                            : annotation.classification === 'mistake'
+                            : annotation.classification === 'mistake' ||
+                                annotation.classification === 'miss'
                               ? '?'
-                              : '?!'}
+                              : annotation.classification === 'inaccuracy'
+                                ? '?!'
+                                : annotation.classification === 'brilliant'
+                                  ? '!!'
+                                  : '!'}
                         </span>
                       )}
                   </button>
@@ -125,9 +131,50 @@ export function MoveList({
         )}
       </div>
       <div className="review-footer">
+        {review?.summary && (
+          <div className="review-report">
+            {review.summary.opening ? (
+              <p className="review-opening">
+                {review.summary.opening.eco ? `${review.summary.opening.eco} ` : ''}
+                {review.summary.opening.name}
+                <span> · first {review.summary.opening.plies} plies</span>
+              </p>
+            ) : (
+              <p className="review-opening unknown">Opening not in the built-in name table.</p>
+            )}
+            {(['white', 'black'] as const).map((side) => (
+              <div className="review-player" key={side}>
+                <strong>
+                  {side === 'white' ? 'White' : 'Black'} ·{' '}
+                  {review.summary?.[side].accuracy === null
+                    ? 'accuracy unavailable'
+                    : `${review.summary?.[side].accuracy}% accuracy`}
+                </strong>
+                <span>
+                  {review.summary?.[side].confidentMoves}/{review.summary?.[side].moves} confident ·{' '}
+                  {review.summary?.[side].averageLossCp === null
+                    ? 'no measured loss'
+                    : `${review.summary?.[side].averageLossCp} avg cp loss`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {review && (
           <div className="review-summary">
-            {(['inaccuracy', 'mistake', 'blunder'] as const).map((kind) => (
+            {(
+              [
+                'brilliant',
+                'great',
+                'best',
+                'excellent',
+                'book',
+                'inaccuracy',
+                'mistake',
+                'miss',
+                'blunder',
+              ] as const
+            ).map((kind) => (
               <span className={kind} key={kind}>
                 <i />
                 {
