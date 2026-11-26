@@ -158,6 +158,12 @@ export interface BenchmarkRow {
   warnings: string[];
 }
 
+export interface BenchmarkSuiteRef {
+  id: string;
+  version: number;
+  sha256: string;
+}
+
 export interface BenchmarkResult {
   id: string;
   appVersion?: string;
@@ -165,6 +171,7 @@ export interface BenchmarkResult {
   settings: SearchSettings;
   rows: BenchmarkRow[];
   comparisons?: Record<string, BenchmarkComparison>;
+  suite?: BenchmarkSuiteRef;
   environment: { platform: string; arch: string; cpus: number; node: string };
 }
 

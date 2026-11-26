@@ -16,6 +16,10 @@ export const OPERA_PGN = `[Event "A Night at the Opera"]
 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7
 16. Qb8+ Nxb8 17. Rd8# 1-0`;
 
+/**
+ * Suite v1 positions, kept as a legacy alias. New code should import SUITE_V1
+ * from './suites.js' so suite identity and hash travel with the positions.
+ */
 export const BENCHMARK_POSITIONS = [
   { name: 'Starting position', fen: DEFAULT_POSITION },
   {

@@ -67,6 +67,14 @@ const resultSchema: z.ZodType<BenchmarkResult> = z
       .min(1)
       .max(32),
     comparisons: z.record(z.string().min(15).max(150), comparisonSchema).optional(),
+    suite: z
+      .object({
+        id: z.string().min(1).max(64),
+        version: z.number().int().min(1).max(999),
+        sha256: z.string().regex(/^[0-9a-f]{64}$/),
+      })
+      .strict()
+      .optional(),
     environment: z
       .object({
         platform: z.string().min(1).max(32),

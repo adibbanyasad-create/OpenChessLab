@@ -17,13 +17,10 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
-import {
-  BENCHMARK_POSITIONS,
-  formatScore,
-  scoreDisagreementCp,
-  validPosition,
-} from '../../shared/chess';
+import { formatScore, scoreDisagreementCp, validPosition } from '../../shared/chess';
+import { SUITE_V1 } from '../../shared/suites';
 import { benchmarkCsv } from '../../shared/csv';
+import { createBundle } from '../../shared/bundles';
 import type { BenchmarkResult, EngineDescriptor, SearchSettings } from '../../shared/types';
 import { useRemoteJob } from '../useRemoteJob';
 import { downloadFile } from '../api';
@@ -89,7 +86,7 @@ export function Experiments({
       engineIds: selected,
       positions:
         suite === 'standard'
-          ? BENCHMARK_POSITIONS
+          ? SUITE_V1.positions
           : suite === 'custom'
             ? customPositions
             : [{ name: 'Workspace position', fen }],
@@ -194,14 +191,14 @@ export function Experiments({
                 }}
               >
                 <option value="current">Current workspace position</option>
-                <option value="standard">Standard suite / 3 positions</option>
+                <option value="standard">Suite v1 / 3 positions</option>
                 <option value="custom">Custom FEN position</option>
               </select>
               <ChevronDown size={16} />
             </div>
             <p className="tiny muted">
               {suite === 'standard'
-                ? 'Opening, middlegame, and rook endgame.'
+                ? `Suite v1: opening, middlegame, and rook endgame. Hash ${SUITE_V1.sha256.slice(0, 12)}….`
                 : suite === 'custom'
                   ? 'Test one exact FEN of your choice.'
                   : 'Compare evaluations of the position on your board.'}
@@ -535,6 +532,39 @@ export function Experiments({
               JSON
             </button>
             <button
+              className="text-button tiny"
+              disabled={!result}
+              title="Download a tamper-evident experiment bundle (.oclb.json) with suite identity, settings, and a SHA-256 checksum."
+              onClick={() => {
+                if (result) {
+                  const suite =
+                    result.suite?.id === SUITE_V1.id && result.suite.version === SUITE_V1.version
+                      ? SUITE_V1
+                      : null;
+                  downloadFile(
+                    `openchesslab-${result.id}.oclb.json`,
+                    JSON.stringify(
+                      createBundle(result, {
+                        suite: suite
+                          ? {
+                              id: suite.id,
+                              version: suite.version,
+                              sha256: suite.sha256,
+                              positions: suite.positions,
+                            }
+                          : null,
+                      }),
+                      null,
+                      2,
+                    ),
+                    'application/json',
+                  );
+                }
+              }}
+            >
+              Bundle
+            </button>
+            <button
               className="icon-button"
               aria-label="Clear saved benchmark history"
               title="Clear saved benchmark history"
@@ -549,6 +579,11 @@ export function Experiments({
           <div className="result-context">
             <span>{job.busy ? 'Showing a previous completed run' : 'Completed run'}</span>
             <time dateTime={result.createdAt}>{new Date(result.createdAt).toLocaleString()}</time>
+            <span className="muted">
+              {result.suite
+                ? `Suite ${result.suite.id} v${result.suite.version} / ${result.suite.sha256.slice(0, 12)}…`
+                : 'Custom positions (no suite)'}
+            </span>
           </div>
         )}
         <div className="table-scroll" role="region" aria-label="Engine search results" tabIndex={0}>
