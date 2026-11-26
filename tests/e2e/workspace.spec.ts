@@ -575,7 +575,7 @@ test('keeps experiment and documentation views accessible and internal guides na
   await expect(page.getByRole('heading', { name: 'Migrating to 0.2', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'verification report', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Verification Report: 0.3.0', exact: true }),
+    page.getByRole('heading', { name: 'Verification Report: 0.4.0', exact: true }),
   ).toBeVisible();
   await expect(page.locator('.prose table')).toHaveCount(2);
   const tables = await new AxeBuilder({ page })
