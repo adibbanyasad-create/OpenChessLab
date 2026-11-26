@@ -1322,6 +1322,101 @@ main {
   display: flex;
   gap: 4px;
 }
+.custom-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 14px 0 10px;
+}
+.custom-option {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 11px;
+  color: #5c6a52;
+}
+.custom-option input,
+.custom-option select {
+  width: 100%;
+  font-size: 12px;
+  min-height: 36px;
+}
+.custom-option small {
+  font-size: 10px;
+  color: #63685b;
+}
+.custom-option.check-option {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.custom-option.check-option input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  accent-color: #4a723b;
+}
+.custom-option.button-option {
+  gap: 4px;
+}
+.hardware-recommendation {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0 4px;
+  padding: 12px;
+  border: 1px solid #e4ebda;
+  border-radius: 7px;
+  background: #f7f9f3;
+}
+.hardware-icon {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #eaf1e3;
+  color: #5e7750;
+}
+.hardware-recommendation > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hardware-recommendation strong {
+  font-size: 11px;
+  font-weight: 550;
+  color: #4a5a42;
+}
+.hardware-recommendation span {
+  font-size: 10px;
+  line-height: 1.7;
+  color: #63685b;
+}
+.hardware-recommendation .text-button {
+  justify-content: flex-start;
+}
+.guide-steps {
+  margin: 0 0 20px;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: #4a5a42;
+}
+.guide-steps code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: #f0f5e7;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+.modal .field-label {
+  margin-top: 16px;
+}
+.modal .field-label:first-of-type {
+  margin-top: 0;
+}
 .notation-scroll {
   height: 197px;
   overflow-y: auto;
@@ -1374,6 +1469,18 @@ main {
 .notation-move.inaccuracy .move-annotation {
   color: #71692c;
 }
+.notation-move.brilliant .move-annotation,
+.notation-move.great .move-annotation,
+.notation-move.best .move-annotation,
+.notation-move.excellent .move-annotation {
+  color: #3f6d37;
+}
+.notation-move.book .move-annotation {
+  color: #5a6652;
+}
+.notation-move.miss .move-annotation {
+  color: #865d30;
+}
 .move-annotation {
   font-size: 10px;
   letter-spacing: -1px;
@@ -1398,6 +1505,41 @@ main {
 .review-footer {
   padding: 12px 15px;
   border-top: 1px solid var(--line);
+}
+.review-report {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.review-opening {
+  font-size: 11px;
+  color: #4a5a42;
+  font-weight: 550;
+}
+.review-opening span {
+  font-weight: 400;
+  color: #63685b;
+}
+.review-opening.unknown {
+  font-weight: 400;
+  color: #63685b;
+}
+.review-player {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: #4a5a42;
+}
+.review-player span {
+  font-size: 10px;
+  color: #63685b;
+}
+.review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 .review-button {
   width: 100%;

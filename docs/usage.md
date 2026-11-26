@@ -31,22 +31,32 @@ Depth is a target, not a guarantee. The server caps each interactive search at e
 
 Hash and threads are set only if the engine advertises the corresponding UCI spin option. Actual applied options are recorded. Unsupported options produce a warning; the engine's own default is retained.
 
+Open **Engine options** to inspect every other advertised UCI option and change supported values. The interface only offers choices the engine actually advertised. Invalid entries are rejected before a search or ignored with a warning. **Recommended for this machine** shows transparent Threads/Hash starting points based on detected CPUs and RAM, with written reasons and a one-click apply button.
+
 ## Review a Game
 
 Select **Review this game** to analyze the main line. Live analysis pauses so it does not compete with review searches. The interface uses the selected engine and settings, with MultiPV 1 and depth capped at 10. The API permits review depth up to 14 and a maximum of 200 half-moves.
 
 The evaluation timeline appears after a completed review. Select a point to navigate to that half-move. Unreviewed games show only the currently measured score, not invented historical evaluations. The chart clips display values at six pawns; actual values remain in the review data.
 
-Labels estimate centipawn loss for the player who moved, comparing the evaluation before and after the move. A move matching the prior principal variation's best move is labeled best. Remaining estimated losses are clamped to zero and classified as follows:
+Labels estimate centipawn loss for the player who moved, comparing the evaluation before and after the move. These are documented OpenChessLab heuristics, not chess.com's proprietary Game Review scores. Classifications are:
 
-- Below 50 cp: good.
-- 50-99 cp: inaccuracy.
-- 100-199 cp: mistake.
-- 200 cp or more: blunder.
+- Book: played within the recognized opening-name table.
+- Brilliant (!!): engine best move with a capture/check and a decisive evaluation.
+- Best: exactly the engine's recommended move.
+- Great (!): effectively no measured loss, including strong non-best continuations.
+- Excellent (!): roughly 25–69 cp estimated loss.
+- Good: roughly 10–24 cp estimated loss.
+- Inaccuracy (?!): roughly 70–149 cp estimated loss.
+- Mistake (?): roughly 150–299 cp estimated loss.
+- Miss (?): a lost mating opportunity at mistake-level loss or worse.
+- Blunder (??): roughly 300 cp or more estimated loss.
 
 Mate scores use a signed 10,000 cp surrogate for this heuristic. Changing a mate distance for the same winner does not incur a loss. These labels are depth-dependent; they are not centipawn accuracy, win probability, or a strength rating. Positions whose requested depth was not confirmed are marked in the result. If either adjacent evaluation is unconfirmed, the move is labeled uncertain (`~`) with no invented loss value. FEN-only searches do not include repetition history.
 
-Use the notation panel's review-export button to download a CSV of plies, evaluations, classifications, losses, uncertainty flags, and best moves. Uncertainty is exported explicitly, so downstream analysis can exclude uncertain rows instead of treating them as confident judgments.
+The review footer reports the recognized opening, when one matches the built-in table, plus per-side accuracy, confident/uncertain move counts, average confident loss, and label totals. Accuracy is `100 * e^(-0.004 * average confident loss)`, excluding uncertain moves. This formula is shown so anyone can reproduce the result; it is not a FIDE, Lichess, or chess.com rating.
+
+Use the notation panel's review-export button to download a CSV of plies, evaluations, classifications, losses, uncertainty flags, phases, book flags, and best moves. Uncertainty is exported explicitly, so downstream analysis can exclude uncertain rows instead of treating them as confident judgments.
 
 ## Keyboard Controls
 

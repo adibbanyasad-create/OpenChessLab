@@ -2,6 +2,26 @@
 
 Meaningful changes are recorded here. Source publication and a tagged GitHub release are separate events; no release or deployment is implied by a version heading alone.
 
+## 0.4.0 - Unreleased
+
+### Added
+
+- Expanded documented review labels: brilliant, great, best, excellent, good, book, inaccuracy, mistake, miss, and blunder.
+- Transparent per-side review accuracy, move counts, average confident loss, game-phase context, and a curated opening-name lookup.
+- Full review reports in the interface with accuracy summaries, label totals, uncertainty visibility, and expanded CSV exports.
+- Advertised engine-option discovery and validated custom UCI options for analysis, reviews, and benchmarks.
+- Hardware-aware Threads/Hash recommendations with written reasoning and one-click application.
+- Guided local-engine registry builder that validates names/paths and generates configuration without browser upload or execution.
+
+### Fixed
+
+- Review summaries no longer conflate uncertain estimates with confident blunder/mistake counts.
+- Custom engine options cannot override core Threads/Hash/MultiPV settings or send unadvertised values silently.
+
+### Compatibility
+
+`Classification` now has ten documented values. Review annotations include `phase` and `bookMove`; review results may include `summary`. Request settings may include optional validated `options`. These additions are backward compatible for consumers that tolerate unknown labels and optional fields. See [migration notes](docs/migration-0.4.md).
+
 ## 0.3.0 - Unreleased
 
 ### Fixed

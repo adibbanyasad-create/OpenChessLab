@@ -7,11 +7,14 @@ import {
   compareScores,
   DEFAULT_POSITION,
   formatScore,
+  gamePhase,
   meanScoreCp,
+  moveAccuracy,
   gameFromFen,
   OPERA_PGN,
   parseGame,
   pvToSan,
+  reviewAccuracy,
   scoreCp,
   scoreDescription,
   scoreDisagreementCp,
@@ -119,20 +122,49 @@ describe('score semantics', () => {
     expect(formatScore()).toBe('\u2014');
   });
   it.each([
-    [49, 'good'],
-    [50, 'inaccuracy'],
-    [99, 'inaccuracy'],
-    [100, 'mistake'],
-    [199, 'mistake'],
-    [200, 'blunder'],
+    [5, 'great'],
+    [15, 'good'],
+    [30, 'excellent'],
+    [80, 'inaccuracy'],
+    [160, 'mistake'],
+    [320, 'blunder'],
   ] as const)('classifies a %i cp White loss as %s', (loss, kind) => {
     expect(
       classifyMove({ type: 'cp', value: 100 }, { type: 'cp', value: 100 - loss }, 'w'),
     ).toEqual({ classification: kind, lossCp: loss, uncertain: false });
   });
+  it('labels book moves, missed mates, sacrifices, and accuracy transparently', () => {
+    expect(
+      classifyMove({ type: 'cp', value: 20 }, { type: 'cp', value: 20 }, 'w', false, false, {
+        bookMove: true,
+      }),
+    ).toEqual({ classification: 'book', lossCp: 0, uncertain: false });
+    expect(
+      classifyMove(
+        { type: 'mate', value: 3, winner: 'w' },
+        { type: 'cp', value: 200 },
+        'w',
+        false,
+        false,
+        { mateOpportunityMissed: true },
+      ).classification,
+    ).toBe('miss');
+    expect(
+      classifyMove({ type: 'cp', value: 100 }, { type: 'cp', value: 100 }, 'w', true, false, {
+        sacrifice: true,
+      }).classification,
+    ).toBe('brilliant');
+    expect(moveAccuracy(0)).toBe(100);
+    expect(moveAccuracy(null)).toBeNull();
+    expect(reviewAccuracy([0, null, 100])).toBe(reviewAccuracy([0, 100]));
+    expect(reviewAccuracy([null])).toBeNull();
+    expect(gamePhase(4, 80)).toBe('opening');
+    expect(gamePhase(40, 80)).toBe('middlegame');
+    expect(gamePhase(70, 80)).toBe('endgame');
+  });
   it('normalizes losses for Black, ignores apparent gains, and identifies the best move', () => {
     expect(
-      classifyMove({ type: 'cp', value: -50 }, { type: 'cp', value: 160 }, 'b').classification,
+      classifyMove({ type: 'cp', value: -50 }, { type: 'cp', value: 260 }, 'b').classification,
     ).toBe('blunder');
     expect(classifyMove({ type: 'cp', value: 0 }, { type: 'cp', value: 80 }, 'w').lossCp).toBe(0);
     expect(

@@ -15,6 +15,8 @@ import type {
   EngineLine,
   SearchSettings,
 } from '../../shared/types';
+import { EngineOptionsPanel } from './EngineOptionsPanel';
+import { HardwareRecommendation } from './HardwareRecommendation';
 
 export const compact = (number: number | null | undefined) =>
   number == null
@@ -286,6 +288,8 @@ export function EnginePanel({
             <ArrowUpRight size={12} />
           </button>
         </details>
+        <EngineOptionsPanel engineId={engineId} settings={settings} setSettings={setSettings} />
+        <HardwareRecommendation settings={settings} setSettings={setSettings} />
         <div className="live-analysis-row">
           <label className="switch-label">
             <input

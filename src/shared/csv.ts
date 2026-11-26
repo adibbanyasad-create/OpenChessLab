@@ -78,6 +78,8 @@ export function reviewCsv(result: ReviewResult): string {
     'classification',
     'loss_cp',
     'uncertain',
+    'phase',
+    'book_move',
     'best_move',
   ];
   const annotationByPly = new Map(
@@ -92,6 +94,8 @@ export function reviewCsv(result: ReviewResult): string {
       annotation?.classification ?? null,
       annotation?.lossCp ?? null,
       annotation ? annotation.uncertain : null,
+      annotation?.phase ?? null,
+      annotation ? annotation.bookMove : null,
       annotation?.bestMove ?? null,
     ]
       .map(csvCell)

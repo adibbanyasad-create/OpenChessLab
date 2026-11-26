@@ -1,14 +1,28 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { pvToSan, validPosition } from '../shared/chess.js';
-import type { AnalysisResult, EngineLine, Score, SearchSettings } from '../shared/types.js';
+import type {
+  AnalysisResult,
+  EngineLine,
+  Score,
+  SearchSettings,
+  UciOption,
+} from '../shared/types.js';
 import type { EngineConfig } from './config.js';
 import { EngineError } from './errors.js';
 
 interface SpinOption {
   min: number;
   max: number;
+  value: number;
 }
+
+type GenericUciOption =
+  | { type: 'spin'; value: number; min: number; max: number }
+  | { type: 'check'; value: boolean }
+  | { type: 'combo'; value: string; choices: string[] }
+  | { type: 'string'; value: string }
+  | { type: 'button' };
 interface Waiter {
   accept: (line: string) => boolean;
   resolve: (line: string) => void;
@@ -16,6 +30,105 @@ interface Waiter {
 }
 
 type UciInfo = Partial<Omit<EngineLine, 'san'>> & { multiPv: number };
+
+const MAX_OPTION_TEXT = 256;
+
+function boundedInteger(
+  raw: string | undefined,
+  minimum: number,
+  maximum: number,
+): number | undefined {
+  if (!raw || !/^-?\d+$/.test(raw)) return undefined;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= minimum && value <= maximum ? value : undefined;
+}
+
+function boundedText(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  if (/[\r\n\0]/.test(raw) || raw.length > MAX_OPTION_TEXT) return undefined;
+  return raw;
+}
+
+export function parseUciOption(
+  line: string,
+): { name: string; option: GenericUciOption } | undefined {
+  if (!line.startsWith('option name ')) return undefined;
+  const match = /^option name (.+?) type (\S+)(?: (.*))?$/.exec(line);
+  const name = boundedText(match?.[1]?.trim());
+  const type = match?.[2];
+  if (!name || !type) return undefined;
+  const rest = match?.[3] ?? '';
+  const keyword = (word: string): string | undefined => {
+    const found = new RegExp(
+      `\\b${word} ((?:(?! (?:default|min|max|var|type|name) ).)*)`,
+      's',
+    ).exec(` ${rest} `);
+    return found?.[1]?.trim();
+  };
+  if (type === 'spin') {
+    const value = boundedInteger(keyword('default'), -1_000_000_000, 1_000_000_000) ?? 0;
+    const min = boundedInteger(keyword('min'), -1_000_000_000, 1_000_000_000);
+    const max = boundedInteger(keyword('max'), -1_000_000_000, 1_000_000_000);
+    if (min === undefined || max === undefined || min > max) return undefined;
+    return { name, option: { type: 'spin', value, min, max } };
+  }
+  if (type === 'check') {
+    const value = (keyword('default') ?? '').toLowerCase();
+    if (value !== 'true' && value !== 'false') return undefined;
+    return { name, option: { type: 'check', value: value === 'true' } };
+  }
+  if (type === 'combo') {
+    const value = boundedText(keyword('default'));
+    const choices = [...rest.matchAll(/ var ((?:(?! var | default | min | max ).)*)/g)]
+      .map((entry) => entry[1]?.trim())
+      .filter(
+        (choice): choice is string =>
+          choice !== undefined && !/[\r\n\0]/.test(choice) && choice.length <= MAX_OPTION_TEXT,
+      );
+    if (value === undefined || !choices.length || !choices.includes(value)) return undefined;
+    return { name, option: { type: 'combo', value, choices: [...new Set(choices)].slice(0, 64) } };
+  }
+  if (type === 'string') {
+    const value = boundedText(keyword('default') ?? '');
+    if (value === undefined) return undefined;
+    return { name, option: { type: 'string', value } };
+  }
+  if (type === 'button') return { name, option: { type: 'button' } };
+  return undefined;
+}
+
+export function validateCustomOption(
+  name: string,
+  option: GenericUciOption,
+  value: string | number | boolean,
+): { command: string; value: string | number | boolean } | string {
+  if (option.type === 'button') return `${name} is a button and cannot be assigned a value.`;
+  if (option.type === 'spin') {
+    if (
+      typeof value !== 'number' ||
+      !Number.isInteger(value) ||
+      value < option.min ||
+      value > option.max
+    ) {
+      return `${name} must be an integer between ${option.min} and ${option.max}.`;
+    }
+    return { command: `setoption name ${name} value ${value}`, value };
+  }
+  if (option.type === 'check') {
+    if (typeof value !== 'boolean') return `${name} must be true or false.`;
+    return { command: `setoption name ${name} value ${value}`, value };
+  }
+  if (option.type === 'combo') {
+    if (typeof value !== 'string' || !option.choices.includes(value)) {
+      return `${name} must be one of: ${option.choices.join(', ')}.`;
+    }
+    return { command: `setoption name ${name} value ${value}`, value };
+  }
+  if (typeof value !== 'string' || /[\r\n\0]/.test(value) || value.length > MAX_OPTION_TEXT) {
+    return `${name} must be one line of at most ${MAX_OPTION_TEXT} characters.`;
+  }
+  return { command: `setoption name ${name} value ${value}`, value };
+}
 
 export function parseInfo(line: string, turn: 'w' | 'b'): UciInfo | undefined {
   const tokens = line.trim().split(/\s+/);
@@ -90,6 +203,7 @@ export class UciEngine {
   private waiters = new Set<Waiter>();
   private listeners = new Set<(line: string) => void>();
   private options = new Map<string, SpinOption>();
+  private advertisedOptions = new Map<string, { name: string; option: GenericUciOption }>();
   private closing?: Promise<void>;
   private runtimeName: string;
   private settings?: SearchSettings;
@@ -109,9 +223,20 @@ export class UciEngine {
 
   private onLine(line: string): void {
     if (line.startsWith('id name ')) this.runtimeName = line.slice(8, 128);
-    const option = /^option name (.+?) type spin .*?min (-?\d+) max (-?\d+)/.exec(line);
-    if (option?.[1])
-      this.options.set(option[1].toLowerCase(), { min: Number(option[2]), max: Number(option[3]) });
+    const parsed = parseUciOption(line);
+    if (parsed) {
+      this.advertisedOptions.set(parsed.name.toLowerCase(), {
+        name: parsed.name,
+        option: parsed.option,
+      });
+      if (parsed.option.type === 'spin') {
+        this.options.set(parsed.name.toLowerCase(), {
+          min: parsed.option.min,
+          max: parsed.option.max,
+          value: parsed.option.value,
+        });
+      }
+    }
     for (const waiter of [...this.waiters]) if (waiter.accept(line)) waiter.resolve(line);
     for (const listener of this.listeners) listener(line);
   }
@@ -186,6 +311,7 @@ export class UciEngine {
       threads: settings.threads,
       hash: settings.hash,
       multiPv: settings.multiPv,
+      ...(settings.options ? { options: { ...settings.options } } : {}),
     };
     this.child = spawn(this.config.command, this.config.args, {
       shell: false,
@@ -238,7 +364,32 @@ export class UciEngine {
       this.send(`setoption name ${name} value ${value}`);
       this.effectiveOptions[name] = value;
     }
+    for (const [name, value] of Object.entries(settings.options ?? {})) {
+      if (['threads', 'hash', 'multipv'].includes(name.toLowerCase())) continue;
+      const advertised = this.advertisedOptions.get(name.toLowerCase());
+      if (!advertised) {
+        this.warnings.push(`${name} is not advertised by this engine; it was ignored.`);
+        continue;
+      }
+      const validated = validateCustomOption(advertised.name, advertised.option, value);
+      if (typeof validated === 'string') {
+        this.warnings.push(validated);
+        continue;
+      }
+      this.send(validated.command);
+      if (typeof validated.value === 'number')
+        this.effectiveOptions[advertised.name] = validated.value;
+      else this.warnings.push(`${advertised.name} was set to a custom engine value.`);
+    }
     await this.waitFor((line) => line === 'readyok', 'isready', 15_000, signal);
+  }
+
+  capabilities(): { name: string; options: UciOption[]; warnings: string[] } {
+    const options: UciOption[] = [...this.advertisedOptions.values()]
+      .map(({ name, option }) => ({ name, ...option }) as UciOption)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 128);
+    return { name: this.runtimeName, options, warnings: [...this.warnings] };
   }
 
   async analyze(
