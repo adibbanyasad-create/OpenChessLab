@@ -98,9 +98,8 @@ jobs:
             --baseline "$GITHUB_WORKSPACE/engine/regression/baseline.oclb.json" \
             --engine candidate \
             --depth 8 \
-            --output candidate.oclb.json \
-            --fail-on depth-limited,missing-stats,disagreement:50
-          mv candidate.oclb.json "$GITHUB_WORKSPACE/candidate.oclb.json"
+            --fail-on depth-limited,missing-stats,disagreement:50 \
+            --print-bundle > "$GITHUB_WORKSPACE/candidate.oclb.json"
 
       - name: Verify the candidate bundle independently
         if: always()

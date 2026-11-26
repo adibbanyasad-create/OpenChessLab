@@ -4,7 +4,7 @@
  * Usage:
  *   node scripts/regress.mjs --baseline baseline.oclb.json --engine my-engine-id \
  *     [--suite openchesslab-suite-v1] [--depth 8] [--threads 1] [--hash 16] \
- *     [--server http://127.0.0.1:3001] [--token ...] [--output candidate.oclb.json]
+ *     [--server http://127.0.0.1:3001] [--token ...] [--print-bundle] \
  *     [--fail-on depth-limited|missing-stats|disagreement:CP] [--json]
  *
  * The script re-runs the baseline's suite (or Suite v1) with the candidate
@@ -14,14 +14,18 @@
  *   crashes/timeouts (job failed), unconfirmed depth, missing stats,
  *   and opt-in eval-disagreement thresholds.
  *
+ * The script never writes files: persist the candidate with
+ * `--print-bundle > candidate.oclb.json` (shell redirect). With
+ * --print-bundle, stdout carries only the bundle JSON while human progress
+ * goes to stderr; the exit code still reports the gate verdict.
+ *
  * Exit codes:
  *   0  candidate completed; all enabled gates passed
  *   1  a gate failed (see output), or the candidate job failed
  *   2  usage/config error, baseline invalid, or suite mismatch
  */
 import { createHash } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { setTimeout } from 'node:timers/promises';
 
 const raw = process.argv.slice(2);
@@ -46,7 +50,7 @@ const threads = Number(flag('threads', '1'));
 const hash = Number(flag('hash', '16'));
 const server = new URL(flag('server', 'http://127.0.0.1:3001'));
 const token = flag('token', process.env.OPENCHESSLAB_API_TOKEN ?? '');
-const output = flag('output', '');
+const printBundle = has('print-bundle');
 const asJson = has('json');
 
 const report = (verdict) => {
@@ -113,26 +117,8 @@ if (!Number.isInteger(depth) || depth < 1 || depth > 24)
   usage.push('--depth must be an integer 1-24.');
 if (![1, 2, 3, 4].includes(threads)) usage.push('--threads must be 1-4.');
 if (![16, 32, 64, 128, 256, 512].includes(hash)) usage.push('--hash must be 16-512 MB.');
-// Constrain --output before any network activity: only a bare file name is
-// accepted (no directories, no separators), joined to the working directory.
-// The name is rebuilt through an allowlist replace so the value reaching the
-// file sink is constructed, not passed through; the equality check fails
-// closed (any stripped character is a usage error, never a silent rename).
-let outputName = '';
-if (output) {
-  const scrubbed = output.replace(/[^A-Za-z0-9._-]/g, '');
-  if (
-    scrubbed !== output ||
-    scrubbed.length === 0 ||
-    scrubbed.length > 128 ||
-    !/^[A-Za-z0-9._-]+\.oclb\.json$/.test(scrubbed) ||
-    basename(scrubbed) !== scrubbed
-  )
-    usage.push(
-      '--output must be a bare file name (letters, digits, dot, dash, underscore) ending in .oclb.json; it is written to the working directory.',
-    );
-  else outputName = scrubbed;
-}
+if (flag('output', undefined) !== undefined)
+  usage.push('The --output file flag was removed: use --print-bundle > candidate.oclb.json.');
 if (usage.length) {
   report({ exitCode: 2, lines: ['Usage errors:'], failures: usage });
 } else {
@@ -188,15 +174,9 @@ if (usage.length) {
     if (job.status !== 'completed')
       throw new Error(`Candidate job ${job.status}: ${job.error ?? 'no detail'}.`);
     const downloaded = await (await request(`/api/jobs/${created.id}/export?format=bundle`)).json();
-    // Verify the downloaded bundle before trusting or writing it: a corrupt
-    // or tampered HTTP response must fail here, never land on disk as if
-    // it were a valid experiment record.
+    // Verify the downloaded bundle before trusting it: a corrupt or tampered
+    // HTTP response must fail here, never pass as a valid experiment record.
     const candidate = verifyCandidateBundle(downloaded);
-    if (outputName) {
-      const outputPath = join(process.cwd(), outputName);
-      await writeFile(outputPath, JSON.stringify(candidate, null, 2));
-      lines.push(`Candidate bundle written to ${outputPath}`);
-    }
     lines.push(
       `Candidate: ${candidate.sha256.slice(0, 12)}… (${candidate.result.rows.length} searches)`,
     );
@@ -261,7 +241,17 @@ if (usage.length) {
         ? 'Result: FAIL — see failures above. No strength claim is made.'
         : 'Result: PASS — candidate completed and all enabled gates passed. This checks stability, not playing strength.',
     );
-    report({ exitCode: failures.length ? 1 : 0, lines, failures, stats });
+    // With --print-bundle, stdout carries ONLY the bundle JSON so a shell
+    // redirect captures a clean .oclb.json file; human progress goes to
+    // stderr instead. The script itself never touches the file system.
+    if (printBundle && !asJson) {
+      for (const line of lines) console.error(line);
+      for (const failure of failures) console.error(`FAILURE: ${failure}`);
+      console.log(JSON.stringify(candidate));
+      process.exitCode = failures.length ? 1 : 0;
+    } else {
+      report({ exitCode: failures.length ? 1 : 0, lines, failures, stats });
+    }
   } catch (error) {
     report({
       exitCode: 2,
