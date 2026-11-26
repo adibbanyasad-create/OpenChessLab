@@ -19,6 +19,7 @@
  *   1  a gate failed (see output), or the candidate job failed
  *   2  usage/config error, baseline invalid, or suite mismatch
  */
+import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
@@ -58,6 +59,47 @@ const report = (verdict) => {
     }
   }
   process.exitCode = verdict.exitCode;
+};
+
+/**
+ * Validate a downloaded candidate bundle before it is trusted or written.
+ * Mirrors scripts/verify-bundle.mjs canonical rules; throws on any mismatch.
+ */
+const verifyCandidateBundle = (bundle) => {
+  if (!bundle || typeof bundle !== 'object') throw new Error('Candidate is not a bundle object.');
+  if (bundle.format !== 'openchesslab-experiment-bundle' || bundle.bundleVersion !== 1)
+    throw new Error('Candidate is not an experiment bundle v1 file.');
+  if (typeof bundle.runId !== 'string' || bundle.runId !== bundle.result?.id)
+    throw new Error('Candidate runId does not match its result.id.');
+  if (!Array.isArray(bundle.result?.rows) || !bundle.result.rows.length)
+    throw new Error('Candidate bundle contains no measured rows.');
+  if (!/^[0-9a-f]{64}$/.test(bundle.sha256 ?? ''))
+    throw new Error('Candidate sha256 is not 64 lowercase hex characters.');
+  if (bundle.suite?.sha256) {
+    const { id, version, positions } = bundle.suite;
+    const suiteHash = createHash('sha256')
+      .update(JSON.stringify({ id, version, positions }), 'utf8')
+      .digest('hex');
+    if (suiteHash !== bundle.suite.sha256)
+      throw new Error('Candidate suite hash does not match its positions.');
+  }
+  const { sha256, ...unsigned } = bundle;
+  const payload = JSON.stringify({
+    format: unsigned.format,
+    bundleVersion: unsigned.bundleVersion,
+    runId: unsigned.runId,
+    appVersion: unsigned.appVersion,
+    createdAt: unsigned.createdAt,
+    suite: unsigned.suite,
+    engines: unsigned.engines,
+    settings: unsigned.settings,
+    environment: unsigned.environment,
+    result: unsigned.result,
+    notes: unsigned.notes,
+  });
+  if (createHash('sha256').update(payload, 'utf8').digest('hex') !== sha256)
+    throw new Error('Candidate content hash mismatch: the download was corrupted or tampered.');
+  return bundle;
 };
 
 /** Parse argv-level config errors before touching the network. */
@@ -145,7 +187,11 @@ if (usage.length) {
     }
     if (job.status !== 'completed')
       throw new Error(`Candidate job ${job.status}: ${job.error ?? 'no detail'}.`);
-    const candidate = await (await request(`/api/jobs/${created.id}/export?format=bundle`)).json();
+    const downloaded = await (await request(`/api/jobs/${created.id}/export?format=bundle`)).json();
+    // Verify the downloaded bundle before trusting or writing it: a corrupt
+    // or tampered HTTP response must fail here, never land on disk as if
+    // it were a valid experiment record.
+    const candidate = verifyCandidateBundle(downloaded);
     if (outputName) {
       const outputPath = join(process.cwd(), outputName);
       await writeFile(outputPath, JSON.stringify(candidate, null, 2));
