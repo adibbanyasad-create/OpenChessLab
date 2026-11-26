@@ -58,9 +58,14 @@ node scripts/regress.mjs \
   --baseline baseline.oclb.json \
   --engine candidate \
   --depth 8 \
-  --output candidate.oclb.json \
-  --fail-on depth-limited,missing-stats,disagreement:50
+  --fail-on depth-limited,missing-stats,disagreement:50 \
+  --print-bundle > candidate.oclb.json
 ```
+
+The CLI never writes files itself: `--print-bundle` sends only the candidate
+bundle JSON to stdout (human progress goes to stderr), so the shell redirect
+captures a clean `.oclb.json` file and the exit code still reports the gate
+verdict.
 
 It re-runs the baseline's suite against a local server, requires the same
 suite hash, and compares honestly: crashes and timeouts fail the job;

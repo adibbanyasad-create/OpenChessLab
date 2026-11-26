@@ -5,30 +5,20 @@ const run = (args: string[]) =>
   spawnSync(process.execPath, ['scripts/regress.mjs', ...args], { encoding: 'utf8' });
 
 describe('regression CLI argument gates', () => {
-  it('accepts only bare bundle file names for --output', () => {
-    for (const output of [
-      '../escape.oclb.json',
-      '/tmp/evil.oclb.json',
-      'sub/dir.oclb.json',
-      '..\\evil.oclb.json',
-      'candidate.json',
-      'evil name.oclb.json',
-      `${'a'.repeat(120)}.oclb.json`,
-    ]) {
-      const result = run(['--baseline', 'b.json', '--engine', 'e', '--output', output]);
-      expect(result.status, output).toBe(2);
-      expect(result.stdout, output).toContain('--output must be a bare file name');
-    }
-  });
-  it('accepts a valid bare bundle name and proceeds to the baseline', () => {
+  it('rejects the removed --output file flag with a migration hint', () => {
     const result = run([
       '--baseline',
       'b.json',
       '--engine',
       'e',
       '--output',
-      'candidate-pr-1.oclb.json',
+      'candidate.oclb.json',
     ]);
+    expect(result.status).toBe(2);
+    expect(result.stdout).toContain('--print-bundle > candidate.oclb.json');
+  });
+  it('accepts --print-bundle and proceeds to the baseline', () => {
+    const result = run(['--baseline', 'b.json', '--engine', 'e', '--print-bundle']);
     expect(result.status).toBe(2);
     expect(result.stdout).toContain("ENOENT: no such file or directory, open 'b.json'");
   });
