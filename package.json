@@ -26,7 +26,9 @@
     "capture:ui": "node scripts/capture-ui.mjs",
     "check": "npm run lint && npm run typecheck && npm run docs:check && npm test",
     "security": "npm audit --audit-level=high",
-    "release:pack": "npm run build && node scripts/package-release.mjs"
+    "release:pack": "npm run build && node scripts/package-release.mjs",
+    "bundle:verify": "node scripts/verify-bundle.mjs",
+    "regress": "node scripts/regress.mjs"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.3.0",

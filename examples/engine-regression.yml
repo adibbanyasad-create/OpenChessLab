@@ -1,0 +1,119 @@
+# Example: run OpenChessLab engine regression checks in YOUR engine repo.
+#
+# Copy this file to .github/workflows/engine-regression.yml in the repository
+# that builds your UCI engine, then adjust the build steps and engine path.
+# It checks out OpenChessLab, starts its server with your engine registered,
+# and fails the PR when the candidate crashes, stalls, skips depth, omits
+# statistics, or drifts beyond your eval gate.
+#
+# This checks stability — not playing strength. No Elo is computed here.
+name: Engine Regression (OpenChessLab)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the engine source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: engine
+
+      # ---- Replace these two steps with your engine's real build. ----
+      - name: Build the candidate engine
+        run: |
+          cd engine
+          # Example for a make-based engine:
+          # make -j"$(nproc)"
+          # echo "ENGINE_BIN=$PWD/my-engine" >> "$GITHUB_ENV"
+          echo 'Replace this step with your engine build.'
+
+      - name: Smoke-test UCI handshake
+        run: |
+          printf 'uci\nisready\nquit\n' | timeout 15 "$ENGINE_BIN" | tee handshake.txt
+          grep -q '^uciok' handshake.txt
+          grep -q '^readyok' handshake.txt
+      # ---- End of engine-specific steps. ----
+
+      - name: Check out OpenChessLab
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: adibbanyasad-create/OpenChessLab
+          persist-credentials: false
+          path: openchesslab
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: openchesslab/package-lock.json
+
+      - name: Install and build OpenChessLab
+        working-directory: openchesslab
+        run: |
+          npm ci
+          npm run build
+
+      - name: Register the candidate engine (server operator step)
+        working-directory: openchesslab
+        run: |
+          node --input-type=module -e "
+            import { writeFileSync } from 'node:fs';
+            writeFileSync('engines.candidate.json', JSON.stringify([{
+              id: 'candidate',
+              name: 'PR candidate engine',
+              description: 'Engine built from this PR.',
+              command: process.env.ENGINE_BIN,
+              args: [],
+            }]));
+          "
+          test -x "$ENGINE_BIN"
+
+      - name: Start the OpenChessLab server
+        working-directory: openchesslab
+        run: |
+          ENGINES_CONFIG="$PWD/engines.candidate.json" PORT=3001 \
+            node dist/server/index.js > /tmp/openchesslab.log 2>&1 &
+          echo $! > /tmp/openchesslab.pid
+          for attempt in $(seq 1 30); do
+            curl -sf http://127.0.0.1:3001/api/health && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:3001/api/health
+
+      - name: Run the regression check
+        working-directory: openchesslab
+        run: |
+          node scripts/regress.mjs \
+            --baseline "$GITHUB_WORKSPACE/engine/regression/baseline.oclb.json" \
+            --engine candidate \
+            --depth 8 \
+            --output "$GITHUB_WORKSPACE/candidate.oclb.json" \
+            --fail-on depth-limited,missing-stats,disagreement:50
+
+      - name: Verify the candidate bundle independently
+        if: always()
+        working-directory: openchesslab
+        run: node scripts/verify-bundle.mjs "$GITHUB_WORKSPACE/candidate.oclb.json"
+
+      - name: Upload the candidate bundle
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: candidate-bundle
+          path: candidate.oclb.json
+          retention-days: 14
+
+      - name: Stop the server
+        if: always()
+        run: kill "$(cat /tmp/openchesslab.pid)" || true
