@@ -58,6 +58,6 @@ Global shortcuts do not run behind native dialogs, including promotion and histo
 
 ## Security Boundary
 
-The browser is untrusted. Validation and engine allowlisting are server responsibilities. Engines and the registry file are trusted administrator-controlled inputs. Spawn does not invoke a shell. Headers restrict active content and external connections. Framing is self-only by default; preview framing requires explicit `FRAME_ANCESTORS` configuration. No global CORS allowance is added.
+The browser is untrusted. Validation and engine allowlisting are server responsibilities. Engines and the registry file are trusted administrator-controlled inputs, but the registry is still read through one bounded file descriptor. Bearer-token checks compare high-entropy secrets online with fixed-length safe comparison rather than a salted offline password hash. Spawn does not invoke a shell. Headers restrict active content and external connections. Framing is self-only by default; preview framing requires explicit `FRAME_ANCESTORS` configuration. No global CORS allowance is added.
 
 This is a local or privately hosted single-user tool. A reverse proxy with TLS and access control, optional API token, and OS resource restrictions are required for more exposed deployments. See [security](../SECURITY.md).

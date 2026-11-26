@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadConfig, loadEngines } from '../../src/server/config';
+import { loadConfig, loadEngines, readBoundedConfig } from '../../src/server/config';
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -113,6 +113,28 @@ describe('administrator-owned engine registry', () => {
       const path = join(directory, 'engines.json');
       await writeFile(path, ' '.repeat(65_537));
       expect(() => loadEngines(path)).toThrow('64 KB');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+  it('enforces the byte bound on the bytes actually read, including multibyte text', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'openchesslab-config-'));
+    try {
+      const path = join(directory, 'engines.json');
+      await writeFile(path, 'é'.repeat(40_000));
+      expect(() => readBoundedConfig(path)).toThrow('64 KB');
+      await writeFile(path, 'x'.repeat(65_536));
+      expect(readBoundedConfig(path)).toHaveLength(65_536);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+  it('reports unreadable registry paths without exposing OS error text', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'openchesslab-config-'));
+    try {
+      expect(() => readBoundedConfig(join(directory, 'missing.json'))).toThrow(
+        'Unable to read the engine configuration file.',
+      );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

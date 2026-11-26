@@ -23,9 +23,9 @@ Include affected versions, the trust boundary involved, expected/actual behavior
 ## Implemented Defenses
 
 - Strict Zod schemas and chess-position validation at API boundaries; request-size and rate limits.
-- Executable allowlisting from server configuration. Requests select engine IDs only; `spawn` never uses a shell.
+- Executable allowlisting from a bounded administrator-owned registry file. Requests select engine IDs only; `spawn` never uses a shell. The registry is read through one file descriptor so a swapped file cannot bypass its byte limit.
 - Host validation and same-origin checks for mutations; no broad CORS policy.
-- Optional bearer authentication with constant-time digest comparison. Credentials and engine paths are not returned by the registry API.
+- Optional online bearer-token comparison using constant-time byte comparison, with unequal token lengths rejected without exceptions. This API token is a shared server credential, not a salted password database; rate limits and server-side secrecy are also required. Credentials and engine paths are not returned by the registry API.
 - Bounded requested hash, threads, depth, positions, PGN length, job count, and concurrent tasks.
 - Per-search and whole-job deadlines, cancellation, process cleanup, bounded stdout buffering, and drained stderr.
 - Errors without raw process paths, stderr, or server stack traces in API responses.

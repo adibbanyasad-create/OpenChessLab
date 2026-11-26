@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { isAbsolute, resolve } from 'node:path';
-import { readFileSync, statSync } from 'node:fs';
+import { closeSync, openSync, readSync, type PathLike } from 'node:fs';
 import { z } from 'zod';
 import type { EngineDescriptor } from '../shared/types.js';
 
@@ -33,6 +33,36 @@ const engineConfigSchema = z
   )
   .max(8);
 
+export function readBoundedConfig(configPath: PathLike, maxBytes = 65_536): string {
+  let fd: number | undefined;
+  try {
+    fd = openSync(configPath, 'r');
+    const chunks: Buffer[] = [];
+    let total = 0;
+    while (total <= maxBytes) {
+      const chunk = Buffer.alloc(Math.min(16_384, maxBytes + 1 - total));
+      const read = readSync(fd, chunk, 0, chunk.length, null);
+      if (read === 0) break;
+      chunks.push(chunk.subarray(0, read));
+      total += read;
+    }
+    if (total > maxBytes) throw new Error('Engine configuration exceeds 64 KB.');
+    return Buffer.concat(chunks).toString('utf8');
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('64 KB')) throw error;
+    // Keep the cause for server-side troubleshooting while returning a sanitized message.
+    throw new Error('Unable to read the engine configuration file.', { cause: error });
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* Descriptor cleanup is best effort. */
+      }
+    }
+  }
+}
+
 export function loadEngines(configPath = process.env.ENGINES_CONFIG): EngineConfig[] {
   const require = createRequire(import.meta.url);
   const stockfish = require('stockfish') as { findEngine: (flavor: string) => string };
@@ -55,9 +85,10 @@ export function loadEngines(configPath = process.env.ENGINES_CONFIG): EngineConf
     },
   ];
   if (configPath) {
+    // Read through one descriptor so an attacker swapping the registry file between a
+    // separate stat() and read() cannot bypass the 64 KB bound.
     const path = resolve(configPath);
-    if (statSync(path).size > 65_536) throw new Error('Engine configuration exceeds 64 KB.');
-    const configured = engineConfigSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+    const configured = engineConfigSchema.parse(JSON.parse(readBoundedConfig(path)));
     engines.push(...configured.map((engine) => ({ ...engine, kind: 'native' as const })));
   }
   if (new Set(engines.map((engine) => engine.id)).size !== engines.length)
