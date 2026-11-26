@@ -44,7 +44,9 @@ Labels estimate centipawn loss for the player who moved, comparing the evaluatio
 - 100-199 cp: mistake.
 - 200 cp or more: blunder.
 
-Mate scores use a signed 10,000 cp surrogate for this heuristic. Changing a mate distance for the same winner does not incur a loss. These labels are depth-dependent; they are not centipawn accuracy, win probability, or a strength rating. Positions whose requested depth was not confirmed are marked in the result. FEN-only searches do not include repetition history.
+Mate scores use a signed 10,000 cp surrogate for this heuristic. Changing a mate distance for the same winner does not incur a loss. These labels are depth-dependent; they are not centipawn accuracy, win probability, or a strength rating. Positions whose requested depth was not confirmed are marked in the result. If either adjacent evaluation is unconfirmed, the move is labeled uncertain (`~`) with no invented loss value. FEN-only searches do not include repetition history.
+
+Use the notation panel's review-export button to download a CSV of plies, evaluations, classifications, losses, uncertainty flags, and best moves. Uncertainty is exported explicitly, so downstream analysis can exclude uncertain rows instead of treating them as confident judgments.
 
 ## Keyboard Controls
 

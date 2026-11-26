@@ -42,14 +42,14 @@ Open **http://localhost:5173**. Vite proxies `/api` to the local engine service.
 - **Analyze a position:** import a single PGN game or a FEN, make legal moves, choose a promotion, and navigate the main line. Desktop drag-and-drop, touch selection, and keyboard controls are supported.
 - **Inspect real engine output:** White-normalized evaluations, mate scores, up to five principal variations in SAN, depth, engine-reported nodes per second, and search time. Unreported measurements are shown as unavailable, not invented zeros.
 - **Control the search:** depth 1-24, 1-4 threads, and 16-512 MB of hash. Unsupported engine options and time-limited searches are explicitly reported.
-- **Review a game:** analyze consecutive positions, visualize an evaluation timeline, and flag estimated inaccuracies, mistakes, and blunders. Labels are heuristics, not an accuracy rating.
-- **Compare engines:** the same position, settings, and protocol, with both bundled engines or your own server-configured UCI executable.
-- **Benchmark honestly:** sequential searches, per-position UCI state resets, environment metadata, measured search wall time, engine-reported nodes and NPS, and JSON/CSV exports. No scores appear until an experiment completes.
+- **Review a game:** analyze consecutive positions, visualize an evaluation timeline, and flag estimated inaccuracies, mistakes, and blunders. Labels are heuristics, not an accuracy rating. Incomplete searches are marked uncertain with null losses, and reviews export to CSV/JSON.
+- **Compare engines:** the same position, settings, and protocol, with both bundled engines or your own server-configured UCI executable. Centipawn-only agreement summaries show evaluation spreads without averaging mates into numeric scores.
+- **Benchmark honestly:** sequential searches, per-position UCI state resets, environment metadata, measured search wall time, engine-reported nodes and NPS, custom FEN positions, and JSON/CSV exports. No scores appear until an experiment completes.
 - **Keep your work:** restore the active game and up to 20 validated benchmark records from browser storage. Historical rows retain the engine name/version actually reported during the run. Export PGN, FEN, JSON, and CSV; clear benchmark history independently of your game.
 
 The [verification report](docs/verification.md) records observed checks and their scope, with the initial report preserved separately. Current hosted checks are available in the repository's [Actions tab](https://github.com/adibbanyasad-create/OpenChessLab/actions). A passing workflow is not evidence of a production deployment.
 
-Upgrading an API client from 0.1? Read the [0.2 migration notes](docs/migration-0.2.md): optional UCI measurements now use `null` when unavailable.
+Upgrading an API client? Read the [0.3 migration notes](docs/migration-0.3.md) and the earlier [0.2 migration notes](docs/migration-0.2.md): uncertain review losses are null, and benchmark comparisons are optional additive metadata.
 
 ## A Deliberately Small Architecture
 

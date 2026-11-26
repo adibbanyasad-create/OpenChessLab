@@ -44,6 +44,8 @@ input.on('line', (command) => {
       send('info score cp 31 nodes 1000 nps 20000 time 50 pv e2e4 e7e5');
     } else if (mode === 'zero-statistics') {
       send('info depth 8 score cp 0 nodes 0 nps 0 time 0 hashfull 0 pv e2e4');
+    } else if (mode === 'instant-search') {
+      send('info depth 8 score cp 31 nodes 1500 nps 999999 time 0 pv e2e4 e7e5');
     } else if (mode === 'bound-only') {
       send('info depth 8 score cp 31 lowerbound nodes 1000 nps 20000 time 50 pv e2e4');
     } else if (mode === 'unscoped-multipv-depth') {

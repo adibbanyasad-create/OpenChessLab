@@ -1,6 +1,6 @@
 import { availableParallelism, arch, platform } from 'node:os';
 import { performance } from 'node:perf_hooks';
-import { classifyMove } from '../shared/chess.js';
+import { classifyMove, meanScoreCp, scoreDisagreementCp } from '../shared/chess.js';
 import type { AnalysisRequest, BenchmarkRequest, ReviewRequest } from '../shared/schemas.js';
 import type { BenchmarkResult, GameData, JobProgress, ReviewResult } from '../shared/types.js';
 import type { EngineConfig } from './config.js';
@@ -69,11 +69,21 @@ export async function reviewGame(
       const move = game.moves[ply - 1];
       if (previous && move) {
         const uci = move.from + move.to + (move.promotion ?? '');
+        // A classification is only meaningful when both adjacent evaluations reached
+        // their requested depth. Otherwise report the move as uncertain instead of
+        // inventing a blunder/mistake from a timed-out search.
+        const uncertain = previous.depthLimited || analysis.depthLimited;
         result.annotations.push({
           ply,
           san: move.san,
           bestMove: previous.bestMove,
-          ...classifyMove(previous.lines[0]!.score, score, move.color, previous.bestMove === uci),
+          ...classifyMove(
+            previous.lines[0]!.score,
+            score,
+            move.color,
+            previous.bestMove === uci,
+            uncertain,
+          ),
         });
       }
       previous = analysis;
@@ -143,5 +153,25 @@ export async function runBenchmark(
       await engine.close();
     }
   }
+  const byPosition = new Map<string, (typeof result.rows)[number][]>();
+  for (const row of result.rows) {
+    const group = byPosition.get(row.fen) ?? [];
+    group.push(row);
+    byPosition.set(row.fen, group);
+  }
+  result.comparisons = Object.fromEntries(
+    [...byPosition].map(([fen, rows]) => {
+      const scores = rows.map((row) => row.score);
+      return [
+        fen,
+        {
+          meanCp: meanScoreCp(scores),
+          disagreementCp: scoreDisagreementCp(scores),
+          mateCount: scores.filter((score) => score.type === 'mate').length,
+          missingScoreCount: 0,
+        },
+      ];
+    }),
+  );
   return result;
 }

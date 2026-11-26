@@ -7,8 +7,8 @@ import { z, ZodError } from 'zod';
 import { analysisSchema, benchmarkSchema, pgnSchema, reviewSchema } from '../shared/schemas.js';
 import { LIMITS } from '../shared/limits.js';
 import { parseGame, validPosition } from '../shared/chess.js';
-import { benchmarkCsv } from '../shared/csv.js';
-import type { BenchmarkResult } from '../shared/types.js';
+import { benchmarkCsv, reviewCsv } from '../shared/csv.js';
+import type { BenchmarkResult, ReviewResult } from '../shared/types.js';
 import { loadConfig, loadEngines, type EngineConfig, type ServerConfig } from './config.js';
 import { AppError } from './errors.js';
 import { JobManager } from './jobs.js';
@@ -237,13 +237,17 @@ export async function createApp(
       .strict()
       .parse(request.query);
     const job = jobs.get(jobId(request.params));
-    if (job.kind !== 'benchmark' || job.status !== 'completed' || !job.result)
-      throw new AppError(409, 'Only completed benchmarks can be exported.');
-    const result = job.result as BenchmarkResult;
+    if (job.status !== 'completed' || !job.result)
+      throw new AppError(409, 'Only completed jobs can be exported.');
+    if (job.kind !== 'benchmark' && job.kind !== 'review')
+      throw new AppError(409, 'Only completed benchmarks and reviews can be exported.');
     reply.header('Content-Disposition', `attachment; filename="openchesslab-${job.id}.${format}"`);
-    return format === 'csv'
-      ? reply.type('text/csv; charset=utf-8').send(benchmarkCsv(result))
-      : reply.type('application/json').send(result);
+    if (format === 'json') return reply.type('application/json').send(job.result);
+    const csv =
+      job.kind === 'benchmark'
+        ? benchmarkCsv(job.result as BenchmarkResult)
+        : reviewCsv(job.result as ReviewResult);
+    return reply.type('text/csv; charset=utf-8').send(csv);
   });
 
   if (existsSync(config.staticRoot)) {

@@ -4,14 +4,17 @@ import {
   BENCHMARK_POSITIONS,
   branchGame,
   classifyMove,
+  compareScores,
   DEFAULT_POSITION,
   formatScore,
+  meanScoreCp,
   gameFromFen,
   OPERA_PGN,
   parseGame,
   pvToSan,
   scoreCp,
   scoreDescription,
+  scoreDisagreementCp,
   validPosition,
 } from '../../src/shared/chess';
 
@@ -125,7 +128,7 @@ describe('score semantics', () => {
   ] as const)('classifies a %i cp White loss as %s', (loss, kind) => {
     expect(
       classifyMove({ type: 'cp', value: 100 }, { type: 'cp', value: 100 - loss }, 'w'),
-    ).toEqual({ classification: kind, lossCp: loss });
+    ).toEqual({ classification: kind, lossCp: loss, uncertain: false });
   });
   it('normalizes losses for Black, ignores apparent gains, and identifies the best move', () => {
     expect(
@@ -134,7 +137,29 @@ describe('score semantics', () => {
     expect(classifyMove({ type: 'cp', value: 0 }, { type: 'cp', value: 80 }, 'w').lossCp).toBe(0);
     expect(
       classifyMove({ type: 'cp', value: 100 }, { type: 'cp', value: -300 }, 'w', true),
-    ).toEqual({ classification: 'best', lossCp: 0 });
+    ).toEqual({ classification: 'best', lossCp: 0, uncertain: false });
+  });
+  it('marks classifications uncertain instead of inventing a loss when depth is unconfirmed', () => {
+    expect(
+      classifyMove({ type: 'cp', value: 100 }, { type: 'cp', value: -300 }, 'w', false, true),
+    ).toEqual({ classification: 'good', lossCp: null, uncertain: true });
+    expect(
+      classifyMove({ type: 'cp', value: 100 }, { type: 'cp', value: -300 }, 'w', true, true),
+    ).toEqual({ classification: 'best', lossCp: 0, uncertain: true });
+  });
+  it('orders mates above centipawns and shorter mates above longer mates', () => {
+    const whiteMate = { type: 'mate', value: 3, winner: 'w' } as const;
+    const longerWhiteMate = { type: 'mate', value: 7, winner: 'w' } as const;
+    const blackMate = { type: 'mate', value: -2, winner: 'b' } as const;
+    expect(compareScores(whiteMate, { type: 'cp', value: 900 })).toBeGreaterThan(0);
+    expect(compareScores(blackMate, { type: 'cp', value: -900 })).toBeLessThan(0);
+    expect(compareScores(whiteMate, longerWhiteMate)).toBeGreaterThan(0);
+    expect(meanScoreCp([{ type: 'cp', value: 10 }, whiteMate, { type: 'cp', value: 30 }])).toBe(20);
+    expect(meanScoreCp([whiteMate, blackMate])).toBeNull();
+    expect(
+      scoreDisagreementCp([{ type: 'cp', value: 10 }, whiteMate, { type: 'cp', value: 60 }]),
+    ).toBe(50);
+    expect(scoreDisagreementCp([whiteMate])).toBeNull();
   });
   it('does not confuse zero-distance mate with a draw', () => {
     expect(scoreCp({ type: 'mate', value: 0, winner: 'b' })).toBe(-10_000);

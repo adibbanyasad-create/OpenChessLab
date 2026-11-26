@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Download, List, Sparkles, Square } from 'lucide-react';
+import { Download, FileDown, List, Sparkles, Square } from 'lucide-react';
 import type { GameData, GameMove, ReviewResult } from '../../shared/types';
 
 export function MoveList({
@@ -11,6 +11,7 @@ export function MoveList({
   progress,
   onReview,
   onExport,
+  onExportReview,
 }: {
   game: GameData;
   ply: number;
@@ -20,6 +21,7 @@ export function MoveList({
   progress?: string;
   onReview: () => void;
   onExport: () => void;
+  onExportReview?: () => void;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const grouped = new Map<number, { w?: GameMove; b?: GameMove }>();
@@ -48,14 +50,26 @@ export function MoveList({
           <List size={16} />
           Game notation
         </h3>
-        <button
-          className="icon-button small"
-          onClick={onExport}
-          aria-label="Export PGN"
-          title="Export PGN"
-        >
-          <Download size={15} />
-        </button>
+        <div className="notation-actions">
+          {review && onExportReview && (
+            <button
+              className="icon-button small"
+              onClick={onExportReview}
+              aria-label="Export review CSV"
+              title="Export review CSV"
+            >
+              <FileDown size={15} />
+            </button>
+          )}
+          <button
+            className="icon-button small"
+            onClick={onExport}
+            aria-label="Export PGN"
+            title="Export PGN"
+          >
+            <Download size={15} />
+          </button>
+        </div>
       </div>
       <div className="notation-scroll" ref={scroll}>
         {game.moves.length ? (
@@ -76,12 +90,16 @@ export function MoveList({
                     onClick={() => setPly(move.ply)}
                     title={
                       annotation
-                        ? `${annotation.classification}: ${annotation.lossCp} cp estimated loss`
+                        ? annotation.uncertain
+                          ? 'Uncertain estimate: an adjacent evaluation did not confirm its requested depth'
+                          : `${annotation.classification}: ${annotation.lossCp} cp estimated loss`
                         : move.san
                     }
                   >
                     <span>{move.san}</span>
+                    {annotation?.uncertain && <span className="move-annotation uncertain">~</span>}
                     {annotation &&
+                      !annotation.uncertain &&
                       ['blunder', 'mistake', 'inaccuracy'].includes(annotation.classification) && (
                         <span className="move-annotation">
                           {annotation.classification === 'blunder'
@@ -113,12 +131,21 @@ export function MoveList({
               <span className={kind} key={kind}>
                 <i />
                 {
-                  review.annotations.filter((annotation) => annotation.classification === kind)
-                    .length
+                  review.annotations.filter(
+                    (annotation) => !annotation.uncertain && annotation.classification === kind,
+                  ).length
                 }{' '}
                 {kind === 'inaccuracy' ? 'inaccuracies' : `${kind}s`}
               </span>
             ))}
+            {review.annotations.some((annotation) => annotation.uncertain) && (
+              <span
+                className="uncertain"
+                title="Moves whose adjacent evaluations did not confirm the requested depth"
+              >
+                <i />~ uncertain estimates
+              </span>
+            )}
           </div>
         )}
         {busy && (

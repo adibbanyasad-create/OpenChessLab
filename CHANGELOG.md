@@ -2,6 +2,26 @@
 
 Meaningful changes are recorded here. Source publication and a tagged GitHub release are separate events; no release or deployment is implied by a version heading alone.
 
+## 0.3.0 - Unreleased
+
+### Fixed
+
+- Review annotations are uncertain with a null loss when either adjacent evaluation did not confirm its requested depth, instead of inventing blunders from timed-out searches.
+- NPS is unavailable when an engine reports nonzero nodes in zero reported milliseconds, instead of repeating a misleading calculated rate.
+- Job polling survives transient request failures with a bounded retry policy, then surfaces repeated failures instead of ending or hanging silently.
+- Benchmark history preserves optional comparison records and avoids rewriting storage when an identical completed run is saved again.
+
+### Added
+
+- Per-position engine-agreement summaries using centipawn-only means/spreads, with mate evaluations counted rather than averaged.
+- Custom single-FEN benchmark experiments in the interface, with client-side validation and server-side schema enforcement.
+- Server-backed review CSV/JSON exports with explicit ply, evaluation, classification, loss, uncertainty, and best-move fields.
+- Regression coverage for uncertain reviews, comparison statistics, instant-search NPS, polling recovery, custom positions, review exports, and stored comparisons.
+
+### Compatibility
+
+Review annotations add `uncertain: boolean` and permit `lossCp: null` for uncertain estimates. Benchmark results may include optional per-position `comparisons`. Consumers should exclude uncertain losses and null statistics from averages. See [migration notes](docs/migration-0.3.md).
+
 ## 0.2.0 - Unreleased
 
 ### Fixed

@@ -209,6 +209,17 @@ describe('UCI process lifecycle', () => {
       await engine.close();
     }
   });
+  it('treats NPS as unavailable when an engine reports nonzero nodes in zero time', async () => {
+    const engine = fixture('instant-search');
+    try {
+      await engine.start(settings, AbortSignal.timeout(3000));
+      const result = await engine.analyze(DEFAULT_POSITION, AbortSignal.timeout(3000));
+      expect(result.lines[0]).toMatchObject({ nodes: 1500, timeMs: 0, nps: null });
+      expect(result.warnings.join(' ')).toContain('zero search time');
+    } finally {
+      await engine.close();
+    }
+  });
   it('represents unreported measurements as null, not measured zero', async () => {
     const engine = fixture('missing-statistics');
     try {

@@ -65,9 +65,19 @@ export async function followJob<T extends JobResult>(
 ): Promise<T | undefined> {
   let job = initial;
   update(job);
+  let failures = 0;
   while (job.status === 'running') {
     await delay(500, signal);
-    job = await api<Job<T>>(`/jobs/${job.id}`, { signal });
+    try {
+      job = await api<Job<T>>(`/jobs/${job.id}`, { signal });
+      failures = 0;
+    } catch (error) {
+      // A transient polling failure must not silently end a long search, but repeated
+      // failures should surface rather than poll forever.
+      if (signal.aborted || ++failures > 5) throw error;
+      await delay(1_000, signal);
+      continue;
+    }
     update(job);
   }
   if (job.status === 'failed') throw new Error(job.error ?? 'Engine job failed.');

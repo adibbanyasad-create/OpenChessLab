@@ -1318,6 +1318,10 @@ main {
   padding-top: 10px;
   padding-bottom: 10px;
 }
+.notation-actions {
+  display: flex;
+  gap: 4px;
+}
 .notation-scroll {
   height: 197px;
   overflow-y: auto;
@@ -2152,6 +2156,75 @@ kbd {
 }
 .throughput-chart {
   padding: 21px 18px;
+}
+.agreement-list {
+  padding: 8px 18px 18px;
+}
+.agreement-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #edf1e6;
+}
+.agreement-row:last-of-type {
+  border-bottom: 0;
+}
+.agreement-row > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.agreement-row strong {
+  font-size: 11px;
+  font-weight: 550;
+  color: #576c43;
+}
+.agreement-row > div > span {
+  font-size: 10px;
+  color: #616958;
+  line-height: 1.6;
+}
+.agreement-row > .mono {
+  font-size: 11px;
+  color: #576c43;
+  white-space: nowrap;
+}
+.agreement-empty {
+  padding: 22px 18px;
+  font-size: 11px;
+  color: #616958;
+  line-height: 1.7;
+}
+.custom-position {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+.custom-position label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 11px;
+  color: #5c6a52;
+}
+.custom-position input {
+  font-size: 12px;
+  min-height: 38px;
+}
+.custom-position textarea {
+  font-size: 12px;
+}
+.agreement-list > p {
+  margin-top: 8px;
+  line-height: 1.8;
+}
+.move-annotation.uncertain,
+.review-summary .uncertain {
+  color: #6f7a66;
 }
 .throughput-row {
   display: grid;

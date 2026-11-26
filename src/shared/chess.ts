@@ -145,6 +145,32 @@ export function scoreCp(score: Score): number {
   return score.type === 'cp' ? score.value : score.winner === 'w' ? 10_000 : -10_000;
 }
 
+function orderScore(score: Score): [number, number] {
+  // Mate results outrank centipawn evaluations for the same winner. Within mate
+  // scores, a shorter reported distance is better for the winner.
+  if (score.type === 'cp') return [0, score.value];
+  const distance = Math.abs(score.value);
+  return score.winner === 'w' ? [1, -distance] : [-1, distance];
+}
+
+export function compareScores(a: Score, b: Score): number {
+  const [aRank, aValue] = orderScore(a);
+  const [bRank, bValue] = orderScore(b);
+  return aRank === bRank ? aValue - bValue : aRank - bRank;
+}
+
+export function meanScoreCp(scores: Score[]): number | null {
+  const values = scores.filter((score) => score.type === 'cp').map((score) => score.value);
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+export function scoreDisagreementCp(scores: Score[]): number | null {
+  const values = scores.filter((score) => score.type === 'cp').map((score) => score.value);
+  if (values.length < 2) return null;
+  return Math.max(...values) - Math.min(...values);
+}
+
 export function formatScore(score?: Score): string {
   if (!score) return '\u2014';
   if (score.type === 'mate') return `${score.winner === 'b' ? '-' : ''}M${Math.abs(score.value)}`;
@@ -164,16 +190,19 @@ export function classifyMove(
   after: Score,
   color: 'w' | 'b',
   playedBest = false,
-): { classification: Classification; lossCp: number } {
-  const lossCp = Math.max(
+  uncertain = false,
+): { classification: Classification; lossCp: number | null; uncertain: boolean } {
+  const loss = Math.max(
     0,
     Math.round((scoreCp(before) - scoreCp(after)) * (color === 'w' ? 1 : -1)),
   );
-  if (playedBest) return { classification: 'best', lossCp: 0 };
+  if (playedBest) return { classification: 'best', lossCp: 0, uncertain };
+  if (uncertain) return { classification: 'good', lossCp: null, uncertain: true };
   return {
-    lossCp,
+    lossCp: loss,
+    uncertain: false,
     classification:
-      lossCp >= 200 ? 'blunder' : lossCp >= 100 ? 'mistake' : lossCp >= 50 ? 'inaccuracy' : 'good',
+      loss >= 200 ? 'blunder' : loss >= 100 ? 'mistake' : loss >= 50 ? 'inaccuracy' : 'good',
   };
 }
 
