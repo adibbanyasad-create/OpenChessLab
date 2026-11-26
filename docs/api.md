@@ -90,7 +90,7 @@ Select 1-4 unique engine IDs and 1-8 valid positions. MultiPV must be 1. Runs ar
 
 New results contain an ID, `appVersion`, timestamp, requested settings, environment metadata, per-position `comparisons`, and one row per engine/position. Rows include requested/reported depth, score, best move, engine-reported nodes/NPS/time, measured wall time, effective options, and warnings. Reported depth, nodes, NPS, and engine time can be null. Wall-clock time is measured by the server. Older exports may omit `appVersion` or `comparisons`; do not guess them from the current server version. Comparison entries key each canonical FEN to a centipawn mean, centipawn spread, mate count, and reserved missing-score count. Mate scores are counted, not averaged into centipawn statistics.
 
-Starting in 0.5, results may include an optional `suite` reference (`id`, `version`, `sha256`) when the requested positions matched a published suite exactly, in order. See [migration notes](migration-0.5.md) and [reproducibility](reproducibility.md).
+Starting in 0.5, results may include an optional `suite` reference (`id`, `version`, `sha256`) when the requested positions matched a published suite exactly, in order. See [0.5 migration notes](migration-0.5.md) and [reproducibility](reproducibility.md).
 
 ## Poll and Cancel
 
