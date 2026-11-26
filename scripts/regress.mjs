@@ -20,7 +20,7 @@
  *   2  usage/config error, baseline invalid, or suite mismatch
  */
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve, sep } from 'node:path';
+import { basename, join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 const raw = process.argv.slice(2);
@@ -71,19 +71,21 @@ if (!Number.isInteger(depth) || depth < 1 || depth > 24)
   usage.push('--depth must be an integer 1-24.');
 if (![1, 2, 3, 4].includes(threads)) usage.push('--threads must be 1-4.');
 if (![16, 32, 64, 128, 256, 512].includes(hash)) usage.push('--hash must be 16-512 MB.');
-// Constrain --output before any network activity: the candidate bundle must be
-// written inside the working directory, with a bounded .oclb.json file name.
-let outputPath = '';
+// Constrain --output before any network activity: only a bare file name is
+// accepted (no directories, no separators), joined to the working directory.
+// This structurally prevents directory escape instead of detecting it.
+let outputName = '';
 if (output) {
-  if (output.length > 256 || !output.endsWith('.oclb.json') || output.includes('\0'))
-    usage.push('--output must be a path of at most 256 characters ending in .oclb.json.');
-  else {
-    // resolve() collapses .. segments, so a prefix check proves containment.
-    const resolved = resolve(output);
-    if (resolved !== process.cwd() && !resolved.startsWith(process.cwd() + sep))
-      usage.push('--output must stay inside the working directory.');
-    else outputPath = resolved;
-  }
+  if (
+    output.length === 0 ||
+    output.length > 128 ||
+    !/^[A-Za-z0-9._-]+\.oclb\.json$/.test(output) ||
+    basename(output) !== output
+  )
+    usage.push(
+      '--output must be a bare file name (letters, digits, dot, dash, underscore) ending in .oclb.json; it is written to the working directory.',
+    );
+  else outputName = output;
 }
 if (usage.length) {
   report({ exitCode: 2, lines: ['Usage errors:'], failures: usage });
@@ -140,7 +142,8 @@ if (usage.length) {
     if (job.status !== 'completed')
       throw new Error(`Candidate job ${job.status}: ${job.error ?? 'no detail'}.`);
     const candidate = await (await request(`/api/jobs/${created.id}/export?format=bundle`)).json();
-    if (outputPath) {
+    if (outputName) {
+      const outputPath = join(process.cwd(), outputName);
       await writeFile(outputPath, JSON.stringify(candidate, null, 2));
       lines.push(`Candidate bundle written to ${outputPath}`);
     }
