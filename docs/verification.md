@@ -8,8 +8,8 @@ Verification date: **2026-11-26**. This report records the 0.5 candidate's obser
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Formatting, linting, and strict type checks | Passed                                                                                                                                   |
 | Local documentation link/image file targets | Passed; external URLs and heading anchors are not validated                                                                              |
-| Unit/integration suite on Node 22.23.1      | PENDING — filled after the full battery runs                                                                                             |
-| Chromium browser suite                      | PENDING — filled after the full battery runs                                                                                             |
+| Unit/integration suite on Node 22.23.1      | 216 passed in 15 files                                                                                                                   |
+| Chromium browser suite                      | 44 passed, 22 desktop and 22 mobile-profile tests                                                                                        |
 | Responsive layout checks                    | Passed at 320, 768, 1024, and 1440 CSS pixels, plus the mobile profile                                                                   |
 | Automated accessibility checks              | No violations in the tested analysis, import, history confirmation, experiment, and documentation states, including collapsed navigation |
 | Production build                            | Passed, with secondary views and their validation code lazy-loaded                                                                       |
@@ -24,12 +24,12 @@ Core browser tests use the production build and real HTTP/engine jobs. Desktop a
 
 The V8 snapshot covers server and shared code, excluding the server process bootstrap. It does not claim UI statement coverage.
 
-| Metric     | Observed coverage                    |
-| ---------- | ------------------------------------ |
-| Statements | PENDING — filled after test:coverage |
-| Branches   | PENDING — filled after test:coverage |
-| Functions  | PENDING — filled after test:coverage |
-| Lines      | PENDING — filled after test:coverage |
+| Metric     | Observed coverage |
+| ---------- | ----------------- |
+| Statements | 93.92%            |
+| Branches   | 86.30%            |
+| Functions  | 96.68%            |
+| Lines      | 95.21%            |
 
 The gates remain 90% statements, 80% branches, 90% functions, and 90% lines. Client helpers also have unit tests, and browser behavior is exercised end to end, but those are not silently included in the percentages above.
 
