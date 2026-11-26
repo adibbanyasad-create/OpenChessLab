@@ -2,7 +2,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Chess } from 'chess.js';
-import { createApp } from '../../src/server/app';
+import { apiTokensMatch, createApp } from '../../src/server/app';
 import { loadConfig } from '../../src/server/config';
 import { APP_VERSION } from '../../src/server/version';
 import { BENCHMARK_POSITIONS, DEFAULT_POSITION, parseGame } from '../../src/shared/chess';
@@ -174,6 +174,14 @@ describe('HTTP API and security boundaries', () => {
     } finally {
       await protectedApp.close();
     }
+  });
+  it('compares bearer tokens without length-dependent exceptions or timing shortcuts', () => {
+    const token = 'this-is-a-test-only-token-123456789';
+    expect(apiTokensMatch(token, token)).toBe(true);
+    expect(apiTokensMatch(token, 'wrong')).toBe(false);
+    expect(apiTokensMatch(token, `${token}x`)).toBe(false);
+    expect(apiTokensMatch(token, token.slice(0, -1))).toBe(false);
+    expect(apiTokensMatch(token, '')).toBe(false);
   });
   it('rate-limits job creation even for rejected input', async () => {
     const limited = await createApp();

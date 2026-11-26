@@ -14,6 +14,7 @@ Meaningful changes are recorded here. Source publication and a tagged GitHub rel
 - Native promotion/history dialogs isolate global shortcuts. Board focus survives keyboard moves and flips, including non-element keyboard-event targets.
 - Benchmark depth entry preserves empty/invalid drafts instead of silently changing values. Results keep their recorded engine names rather than current registry labels.
 - Explicit token removal is respected, all supported RequestInit header representations are preserved, and bearer schemes are validated consistently.
+- Bearer-token comparison avoids length-dependent exceptions and reads the bounded engine registry through one file descriptor, resolving two CodeQL warnings without changing API behavior.
 
 ### Added
 

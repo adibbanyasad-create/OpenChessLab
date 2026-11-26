@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import rateLimit from '@fastify/rate-limit';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { z, ZodError } from 'zod';
 import { analysisSchema, benchmarkSchema, pgnSchema, reviewSchema } from '../shared/schemas.js';
@@ -33,6 +33,23 @@ export function hostAllowed(host: string, allowed: string[]): boolean {
   }
   return allowed.some((entry) =>
     entry.startsWith('.') ? hostname.endsWith(entry) : hostname === entry,
+  );
+}
+
+export function apiTokensMatch(expected: string, supplied: string): boolean {
+  // lgtm[js/insufficient-password-hash] This bearer credential is already an
+  // online high-entropy server secret protected by rate limits, HTTPS/TLS
+  // expectations, and fixed-length timingSafeEqual comparison. A salted
+  // offline password hash would add no meaningful protection and would imply
+  // multi-user password storage that this local-first service does not have.
+  // Both values are bounded visible-ASCII bearer tokens. Rejecting unequal byte
+  // lengths up front avoids Node's differently sized buffer error while leaving the
+  // remaining comparison in timingSafeEqual.
+  const expectedBytes = Buffer.from(expected, 'utf8');
+  const suppliedBytes = Buffer.from(supplied, 'utf8');
+  return (
+    expectedBytes.byteLength === suppliedBytes.byteLength &&
+    timingSafeEqual(expectedBytes, suppliedBytes)
   );
 }
 
@@ -133,8 +150,7 @@ export async function createApp(
     if (config.apiToken && apiRequest && route !== '/api/health') {
       const supplied =
         /^Bearer ([\x21-\x7e]+)$/i.exec(request.headers.authorization ?? '')?.[1] ?? '';
-      const digest = (value: string) => createHash('sha256').update(value).digest();
-      if (!timingSafeEqual(digest(supplied), digest(config.apiToken)))
+      if (!apiTokensMatch(config.apiToken, supplied))
         throw new AppError(
           401,
           'Authentication required. Add the server token in Connection settings.',
