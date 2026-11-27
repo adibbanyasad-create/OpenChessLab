@@ -293,7 +293,7 @@ export function makeNullMove(fen: string): string | null {
   const turn = parts[1] === 'w' ? 'b' : 'w';
   const halfmove = parts[4] ? Number(parts[4]) + 1 : 1;
   const fullmove =
-    parts[1] === 'b' ? (parts[5] ? Number(parts[5]) + 1 : 1) : (parts[5] ? Number(parts[5]) : 1);
+    parts[1] === 'b' ? (parts[5] ? Number(parts[5]) + 1 : 1) : parts[5] ? Number(parts[5]) : 1;
   const nullFen = `${parts[0]} ${turn} ${parts[2]} - ${halfmove} ${fullmove}`;
   try {
     validPosition(nullFen);

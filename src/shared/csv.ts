@@ -88,9 +88,7 @@ export function reviewCsv(result: ReviewResult): string {
   );
   const rows = result.scores.map((point) => {
     const annotation = annotationByPly.get(point.ply);
-    const punishment = annotation?.refutation
-      ? annotation.refutation.lineSan.join(' ')
-      : null;
+    const punishment = annotation?.refutation ? annotation.refutation.lineSan.join(' ') : null;
     return [
       point.ply,
       formatScore(point.score),
