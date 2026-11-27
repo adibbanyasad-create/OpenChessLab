@@ -7,7 +7,7 @@
 //    unresolved) and keeps the .ts suffix, which browsers refuse to execute
 //    as a worker; esbuild output is a single self-contained .js file. The
 //    hashed reference in the main bundle is patched to match.
-import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';

@@ -13,6 +13,11 @@ export default tseslint.config(
       'playwright-report/**',
       'test-results/**',
       'artifacts/**',
+      // Generated Capacitor shell: synced web assets plus Gradle output.
+      'android/app/src/main/assets/**',
+      'android/app/build/**',
+      'android/build/**',
+      'android/capacitor-cordova-android-plugins/**',
     ],
   },
   js.configs.recommended,

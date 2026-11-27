@@ -48,6 +48,7 @@ import type {
   SearchSettings,
 } from '../shared/types';
 import { api, downloadFile, getToken, setToken } from './api';
+import { nativeConfirmExit, nativeTap, useNativeChrome } from './native';
 import { isSoundEnabled, playSound, setSoundEnabled } from './sounds';
 import { isOfflineEngineAvailable, useOfflineJob } from './offlineEngine';
 import { useRemoteJob } from './useRemoteJob';
@@ -126,6 +127,8 @@ export function App() {
   const analysis = useRemoteJob<AnalysisResult>();
   const reviewJob = useRemoteJob<ReviewResult>();
   const offline = useOfflineJob();
+  useNativeChrome();
+  useEffect(() => nativeConfirmExit(() => window.close()), []);
   const OFFLINE_ID = 'stockfish-offline';
   const offlineActive = engineId === OFFLINE_ID;
   const fen = game.positions[ply] ?? game.initialFen;
@@ -321,6 +324,7 @@ export function App() {
     try {
       changeGame(branchGame(game, ply, move));
       moveFocus.current = move.slice(2, 4);
+      nativeTap();
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'This move is not legal.');
     }

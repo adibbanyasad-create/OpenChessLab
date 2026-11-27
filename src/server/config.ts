@@ -66,13 +66,17 @@ export function readBoundedConfig(configPath: PathLike, maxBytes = 65_536): stri
 export function loadEngines(configPath = process.env.ENGINES_CONFIG): EngineConfig[] {
   const require = createRequire(import.meta.url);
   const stockfish = require('stockfish') as { findEngine: (flavor: string) => string };
+  // Inside a single-executable build, process.execPath is the desktop app
+  // itself, which cannot run engine scripts. OPENCHESSLAB_NODE points at a
+  // real Node runtime; otherwise engine scripts run under execPath as usual.
+  const nodeRuntime = process.env.OPENCHESSLAB_NODE?.trim() || process.execPath;
   const engines: EngineConfig[] = [
     {
       id: 'stockfish-lite',
       name: 'Stockfish 19 Lite',
       description: 'Small neural network. Fast starts, multithreaded WASM.',
       kind: 'wasm',
-      command: process.execPath,
+      command: nodeRuntime,
       args: [stockfish.findEngine('lite')],
     },
     {
@@ -80,7 +84,7 @@ export function loadEngines(configPath = process.env.ENGINES_CONFIG): EngineConf
       name: 'Stockfish 19',
       description: 'Full neural network. Multithreaded WASM reference engine.',
       kind: 'wasm',
-      command: process.execPath,
+      command: nodeRuntime,
       args: [stockfish.findEngine('full')],
     },
   ];

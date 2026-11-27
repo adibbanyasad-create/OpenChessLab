@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">OpenChessLab</string>
+    <string name="title_activity_main">OpenChessLab</string>
+    <string name="package_name">lab.openchess.app</string>
+    <string name="custom_url_scheme">lab.openchess.app</string>
+</resources>
