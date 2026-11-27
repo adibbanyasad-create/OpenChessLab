@@ -107,7 +107,8 @@ try {
     throw new Error(injected.error?.message ?? injected.stderr);
 
   // 3b. On Windows, stamp the executable icon + version metadata. rcedit only
-  // runs on Windows; other platforms keep the Node default icon.
+  // runs on Windows; other platforms keep the Node default icon. A hard
+  // timeout guards against rcedit hanging on hosted runners.
   if (isWindows) {
     const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
     const [major = '0', minor = '0', patch = '0'] = version.split('.');
@@ -131,10 +132,12 @@ try {
         'ProductName',
         'OpenChessLab',
       ],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', timeout: 120_000 },
     );
     if (stamped.error || stamped.status !== 0)
-      throw new Error(stamped.error?.message ?? stamped.stderr);
+      throw new Error(
+        `rcedit icon stamping failed (signal ${stamped.signal ?? 'none'}): ${stamped.error?.message ?? stamped.stderr}`,
+      );
     console.log('Stamped Windows icon and version metadata.');
   }
 
