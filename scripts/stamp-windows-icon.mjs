@@ -77,7 +77,7 @@ const versionInfo = Resource.VersionInfo.create(
   ],
 );
 versionInfo.outputToResourceEntries(resources.entries);
-executable.setResource(resources.entries);
+resources.outputResource(executable);
 await writeFile(exePath, Buffer.from(executable.generate()));
 
 // Verify by re-reading: the icon group and version strings must be present.
