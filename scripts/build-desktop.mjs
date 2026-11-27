@@ -106,39 +106,20 @@ try {
   if (injected.error || injected.status !== 0)
     throw new Error(injected.error?.message ?? injected.stderr);
 
-  // 3b. On Windows, stamp the executable icon + version metadata. rcedit only
-  // runs on Windows; other platforms keep the Node default icon. A hard
-  // timeout guards against rcedit hanging on hosted runners.
+  // 3b. On Windows, stamp the executable icon + version metadata with the
+  // pure-JS resedit library (in-process: no external binary that can hang).
+  // Other platforms keep the Node default icon.
   if (isWindows) {
-    const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-    const [major = '0', minor = '0', patch = '0'] = version.split('.');
     const stamped = spawnSync(
-      join(root, 'node_modules/rcedit/bin/rcedit-x64.exe'),
-      [
-        binaryPath,
-        '--set-icon',
-        join(root, 'assets/icons/openchesslab-icon.ico'),
-        '--set-file-version',
-        `${major}.${minor}.${patch}.0`,
-        '--set-product-version',
-        `${major}.${minor}.${patch}.0`,
-        '--set-version-string',
-        'CompanyName',
-        'OpenChessLab',
-        '--set-version-string',
-        'FileDescription',
-        'OpenChessLab - local-first chess analysis workspace',
-        '--set-version-string',
-        'ProductName',
-        'OpenChessLab',
-      ],
+      process.execPath,
+      [join(root, 'scripts/stamp-windows-icon.mjs'), binaryPath, version],
       { encoding: 'utf8', timeout: 120_000 },
     );
     if (stamped.error || stamped.status !== 0)
       throw new Error(
-        `rcedit icon stamping failed (signal ${stamped.signal ?? 'none'}): ${stamped.error?.message ?? stamped.stderr}`,
+        `Icon stamping failed (signal ${stamped.signal ?? 'none'}): ${stamped.stdout ?? ''}${stamped.error?.message ?? stamped.stderr}`,
       );
-    console.log('Stamped Windows icon and version metadata.');
+    console.log((stamped.stdout ?? '').trim());
   }
 
   // 4. Stage the runtime companions the single file cannot embed: the web
