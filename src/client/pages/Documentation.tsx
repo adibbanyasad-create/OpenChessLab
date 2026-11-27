@@ -27,6 +27,7 @@ import publishing from '../../../docs/publishing.md?raw';
 import roadmap from '../../../docs/roadmap.md?raw';
 import maintenance from '../../../docs/maintenance.md?raw';
 import migration from '../../../docs/migration-0.2.md?raw';
+import migration06 from '../../../docs/migration-0.6.md?raw';
 import migration05 from '../../../docs/migration-0.5.md?raw';
 import migration04 from '../../../docs/migration-0.4.md?raw';
 import migration03 from '../../../docs/migration-0.3.md?raw';
@@ -61,6 +62,13 @@ const documents = [
   { id: 'maintenance', title: 'Maintenance & updates', icon: Settings2, text: maintenance },
   { id: 'publishing', title: 'Publish & release', icon: GitBranch, text: publishing },
   { id: 'roadmap', title: 'Future directions', icon: Flag, text: roadmap },
+  {
+    id: 'migration-0.6',
+    title: 'Migrating to 0.6',
+    icon: FileCode2,
+    text: migration06,
+    secondary: true,
+  },
   {
     id: 'migration-0.5',
     title: 'Migrating to 0.5',

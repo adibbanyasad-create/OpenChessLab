@@ -2,6 +2,21 @@
 
 Meaningful changes are recorded here. Source publication and a tagged GitHub release are separate events; no release or deployment is implied by a version heading alone.
 
+## 0.6.0 - Unreleased
+
+### Added
+
+- Alive review experience: chess.com-style identity badges for every move label, animated evaluation bar and chart reveals, turning-point markers, piece landing motion, pulsing check highlight, best-move arrow draw-in, and a synthesized zero-asset sound engine with a persisted mute toggle.
+- Offline on-device Stockfish engine: a Web Worker runs the bundled single-threaded Lite build with zero server dependency, automatic fallback when the engine service is unreachable, and honest single-threaded warnings.
+- Android app shell (Capacitor, `lab.openchess.app`) with original launcher/splash artwork, status-bar theming, move haptics, and back-button exit confirm. Debug APKs build on GitHub Actions.
+- Desktop single-file executable builder (Node SEA): double-click `.exe` starts the loopback service and opens the workspace; Windows smoke test runs a real search.
+- Native build matrix workflow (`.github/workflows/native.yml`) covering the APK and the Windows executable on every relevant change.
+- Delivered mates and near-perfect sacrifices now earn the brilliant label; thresholds stay documented and heuristic.
+
+### Compatibility
+
+No API or bundle contract changes. The content security policy gains `worker-src 'self'` and script `wasm-unsafe-eval` for the offline engine; `.wasm` responses carry `application/wasm`. See [migration notes](docs/migration-0.6.md).
+
 ## 0.5.0 - Unreleased
 
 ### Added

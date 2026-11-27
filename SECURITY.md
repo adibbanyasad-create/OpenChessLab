@@ -2,7 +2,7 @@
 
 ## Supported Scope
 
-OpenChessLab 0.5.x is a single-user, local-first application. It includes defensive controls and automated checks, but has not received an independent security audit. It is not a hardened public multi-tenant service. See the changelog and migration notes before upgrading an API client from an earlier version.
+OpenChessLab 0.6.x is a single-user, local-first application. It includes defensive controls and automated checks, but has not received an independent security audit. It is not a hardened public multi-tenant service. See the changelog and migration notes before upgrading an API client from an earlier version.
 
 ## Private Reporting
 
@@ -29,7 +29,7 @@ Include affected versions, the trust boundary involved, expected/actual behavior
 - Bounded requested hash, threads, depth, positions, PGN length, job count, and concurrent tasks.
 - Per-search and whole-job deadlines, cancellation, process cleanup, bounded stdout buffering, and drained stderr.
 - Errors without raw process paths, stderr, or server stack traces in API responses.
-- CSP, MIME-sniffing protection, no-referrer policy, and restricted browser capability policies. Framing is self-only by default. Additional trusted frame origins require explicit `FRAME_ANCESTORS` configuration; do not enable preview allowances on a standalone deployment.
+- CSP, MIME-sniffing protection, no-referrer policy, and restricted browser capability policies. Framing is self-only by default. Additional trusted frame origins require explicit `FRAME_ANCESTORS` configuration; do not enable preview allowances on a standalone deployment. The CSP allows `worker-src 'self'` and `wasm-unsafe-eval` for the bundled offline Stockfish engine; `eval()` and inline scripts remain blocked.
 - CSV formula-prefix escaping for untrusted string cells.
 - Dependency audits, static CodeQL workflow configuration, scheduled regression checks, pinned action/container revisions, and read-only default CI permissions. Check Actions for actual execution outcomes; configuration alone is not evidence of a successful scan.
 
@@ -40,6 +40,11 @@ There are no analytics integrations, external font requests, cloud analysis call
 The active game and up to 20 benchmark records are stored in browser local storage; tokens use tab-scoped session storage, with an in-memory fallback if storage is blocked. Records include FENs and engine/runtime metadata. These stores are not encrypted at rest. Clear history removes saved benchmark records only. Close other OpenChessLab tabs first; in-memory views are not synchronized. To remove all local state, clear the site's browser data and reload. Downloaded exports must be handled separately. Restarting the server removes job results; completed results also expire or are evicted under bounded retention.
 
 Server access logs include method, route, request ID, and connection metadata. Application code does not log request bodies or bearer tokens, but operators must audit reverse-proxy logging separately.
+
+## Native Packages
+
+- Android debug APKs from CI are testing artifacts signed with a throwaway key. Any matching signature can replace them; reinstall from a trusted build instead of updating across untrusted installs. They request only INTERNET permission and analyze on-device; they never contact an analysis server.
+- The desktop `.exe` runs the full server on loopback and opens the system browser. Treat it like `npm start`: do not run it on shared machines you do not trust, and keep `OPENCHESSLAB_NODE` pointed at an official Node runtime when set.
 
 ## Remaining Risks
 

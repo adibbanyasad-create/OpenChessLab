@@ -3,7 +3,7 @@
 ## Requirements
 
 - Node.js 22.12 or later in the 22.x line, Node.js 24.x, or Node.js 26.x; npm 10 or later. Node 24 is the recommended development runtime.
-- A modern browser supporting WebAssembly, native dialogs, Fetch, and CSS Grid. The server runs engine WebAssembly; the browser only renders the interface.
+- A modern browser supporting WebAssembly, native dialogs, Fetch, and CSS Grid. Server-backed search runs engine WebAssembly in Node; the offline engine runs the same Stockfish build in a Web Worker on the device.
 - Enough RAM for the Node server, the selected neural network, and requested hash. Two concurrent searches can each request 512 MB of hash; additional engine memory is required.
 - Network access for the initial npm install. The Stockfish dependency is approximately 205 MB unpacked and contains full and Lite builds.
 
@@ -58,6 +58,46 @@ docker run --rm --init -p 127.0.0.1:3001:3001 \
 ```
 
 Do not publish the container port on all host interfaces without authentication, TLS, and network controls. Set engine settings to fit the container's resource limits.
+
+## Native Packages
+
+**Android APK (debug, for testing):** built by the `Native Builds` GitHub
+workflow — no local SDK needed. Download the `openchesslab-debug-apk`
+artifact, sideload it on a device running Android 7.0 (API 24) or later, and
+the workspace opens with the offline engine ready. Debug builds use a
+throwaway CI signature, so reinstall rather than update across builds, and
+never publish them to Google Play. Reviews, benchmarks, and custom server
+engines need the desktop/server build below.
+
+To build locally with Android Studio or the command-line tools:
+
+```bash
+npm ci
+npm run build
+npx cap sync android
+cd android && ./gradlew :app:assembleDebug
+```
+
+The APK lands in `android/app/build/outputs/apk/debug/`.
+
+**Desktop executable (Windows):** the same workflow builds
+`OpenChessLab.exe` with Node's Single Executable Application support and
+smoke-tests it with a real search. Double-click it: the loopback service
+starts and the workspace opens in the default browser. Close the console
+window to stop the service. Searches spawn engine scripts with
+`OPENCHESSLAB_NODE` when set, else the launched runtime.
+
+To build locally on the target OS:
+
+```bash
+npm ci
+npm run build
+node scripts/build-desktop.mjs
+node scripts/smoke-desktop.mjs dist/desktop/OpenChessLab.exe
+```
+
+The binary and its `.sha256` sidecar land in `dist/desktop/`. Cross-OS
+builds are not supported: build the `.exe` on Windows.
 
 ## Troubleshooting
 
