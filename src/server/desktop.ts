@@ -9,12 +9,18 @@ import { loadConfig, loadEngines } from './config.js';
 import { APP_VERSION } from './version.js';
 
 function openBrowser(url: string): void {
+  // Only our own loopback service URL may be opened, and only with argument
+  // vectors (never a shell string): anything else is refused outright.
+  if (!/^http:\/\/127\.0\.0\.1:\d{1,5}\/$/.test(url)) return;
   const opener =
     process.platform === 'win32'
       ? { command: 'cmd', args: ['/c', 'start', '""', url] }
       : process.platform === 'darwin'
         ? { command: 'open', args: [url] }
         : { command: 'xdg-open', args: [url] };
+  // lgtm[js/indirect-command-line-injection] The URL above is validated to a
+  // fixed loopback shape and passed as an argv element without a shell, so no
+  // environment value can inject additional commands or arguments.
   execFile(opener.command, opener.args, { windowsHide: true }, () => undefined);
 }
 

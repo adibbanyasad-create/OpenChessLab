@@ -63,8 +63,7 @@ interface WorkerScope {
   postMessage: (message: unknown) => void;
   importScripts: (...urls: string[]) => void;
   addEventListener: (type: 'message', listener: (event: MessageEvent) => void) => void;
-  location: { href: string };
-  stockfishListener?: (line: string) => void;
+  location: { href: string; origin: string };
 }
 
 declare const self: WorkerScope;
@@ -312,9 +311,45 @@ async function startSearch(request: OfflineStartRequest): Promise<void> {
   }, timeLimitMs + 5_000);
 }
 
+// Dedicated workers receive messages only from the page that created them,
+// but defense in depth still applies: accept only same-origin events with
+// the exact protocol shape, and validate every field before searching.
+function trustedControl(event: MessageEvent): OfflineStartRequest | OfflineStopRequest | undefined {
+  // lgtm[js/missing-origin-check] DedicatedWorkerGlobalScope has exactly one
+  // client (its creator); there is no cross-origin sender to check. The
+  // check below rejects anything unexpected (Chromium reports an empty
+  // origin for same-origin worker messages, so both are accepted), and the
+  // payload schema is validated field by field.
+  if (event.origin !== '' && event.origin !== self.location.origin) return undefined;
+  const message = event.data as {
+    id?: unknown;
+    type?: unknown;
+    fen?: unknown;
+    depth?: unknown;
+    multiPv?: unknown;
+    timeLimitMs?: unknown;
+  } | null;
+  if (!message || typeof message !== 'object') return undefined;
+  if (typeof message.id !== 'string' || !message.id || message.id.length > 128) return undefined;
+  if (message.type === 'stop') return { id: message.id, type: 'stop' };
+  if (message.type !== 'start') return undefined;
+  const { fen, depth, multiPv, timeLimitMs } = message;
+  if (
+    typeof fen !== 'string' ||
+    typeof depth !== 'number' ||
+    !Number.isInteger(depth) ||
+    typeof multiPv !== 'number' ||
+    !Number.isInteger(multiPv) ||
+    typeof timeLimitMs !== 'number' ||
+    !Number.isInteger(timeLimitMs)
+  )
+    return undefined;
+  return { id: message.id, type: 'start', fen, depth, multiPv, timeLimitMs };
+}
+
 function dispatchMessage(event: MessageEvent<OfflineStartRequest | OfflineStopRequest>) {
-  const message = event.data;
-  if (!message || typeof message !== 'object') return;
+  const message = trustedControl(event);
+  if (!message) return;
   if (message.type === 'stop') {
     if (active?.id === message.id) {
       try {
@@ -345,7 +380,7 @@ function dispatchMessage(event: MessageEvent<OfflineStartRequest | OfflineStopRe
 // Until the engine script installs its own handler, control messages wait.
 self.onmessage = (event: MessageEvent<OfflineStartRequest | OfflineStopRequest>) => {
   if (!engineLoaded) {
-    const message = event.data;
+    const message = trustedControl(event);
     if (message?.type === 'start') {
       loadEngine()
         .then(() => dispatchMessage(event))
@@ -363,10 +398,12 @@ self.onmessage = (event: MessageEvent<OfflineStartRequest | OfflineStopRequest>)
   dispatchMessage(event);
 };
 
-// The Stockfish script answers with postMessage(string), which arrives here
-// as a message event on this same scope. Engine lines are strings; our own
-// protocol replies are objects posted below, which we must not feed back.
+// The Stockfish script answers with postMessage(string): same-origin engine
+// output only. Control replies posted below are objects and never feed back.
 self.addEventListener('message', (event: MessageEvent) => {
+  // lgtm[js/missing-origin-check] Same single-client dedicated worker as
+  // above: the origin check documents the invariant for string engine lines.
+  if (event.origin !== '' && event.origin !== self.location.origin) return;
   if (typeof event.data === 'string') onEngineLine(event.data);
 });
 

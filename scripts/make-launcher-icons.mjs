@@ -2,13 +2,16 @@
 // OpenChessLab knight mark as dependency-free SVG files, then rasterizes the
 // mipmap PNGs with Chromium headless (already a devDependency via Playwright).
 // Falls back to keeping generated SVGs only if rasterization is unavailable.
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '..');
 const res = join(root, 'android/app/src/main/res');
+// Private scratch directory (0700, unpredictable name): never a fixed path
+// under the shared temp dir, so other users cannot pre-create or swap files.
+const scratch = await mkdtemp(join(tmpdir(), 'ocl-icons-'), { mode: 0o700 });
 
 const knight = (stroke, width) =>
   `<path d="M19 47h29M22 41h23l-3-11 3-7-10-9-7 1-1 6-10 11 9 3 7-8-2 14" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linejoin="round"/><circle cx="33" cy="22" r="1.6" fill="${stroke}"/>`;
@@ -24,7 +27,10 @@ const splash = (width, height) => {
 };
 
 async function rasterize(svgPath, pngPath, width, height) {
-  const html = join(tmpdir(), `ocl-shot-${Date.now()}-${Math.floor(Math.random() * 1e6)}.html`);
+  const html = join(
+    scratch,
+    `shot-${process.pid}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.html`,
+  );
   await writeFile(
     html,
     `<!doctype html><html><body style="margin:0"><img src="file://${svgPath}" width="${width}" height="${height}"></body></html>`,
@@ -58,8 +64,7 @@ const splashSizes = {
   'drawable-port-xxxhdpi': [1280, 1920],
 };
 
-await mkdir(join(tmpdir(), 'ocl-icons'), { recursive: true });
-const tmp = join(tmpdir(), 'ocl-icons');
+const tmp = scratch;
 for (const [density, size] of Object.entries(densities)) {
   const dir = join(res, `mipmap-${density}`);
   const svgPath = join(tmp, `icon-${density}.svg`);
