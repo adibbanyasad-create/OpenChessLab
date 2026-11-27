@@ -17,7 +17,7 @@ export interface OnlineGameItem {
   url: string;
 }
 
-const USER_AGENT = 'OpenChessLab/0.6 (https://github.com/adibbanyasad-create/OpenChessLab)';
+const USER_AGENT = 'OpenChessLab/0.7 (https://github.com/adibbanyasad-create/OpenChessLab)';
 
 export async function fetchChessComGames(username: string, limit = 10): Promise<OnlineGameItem[]> {
   const cleanUser = username.trim().toLowerCase();

@@ -2,7 +2,7 @@
 
 Meaningful changes are recorded here. Source publication and a tagged GitHub release are separate events; no release or deployment is implied by a version heading alone.
 
-## 0.7.0 - Unreleased
+## 0.7.0 - 2026-11-27
 
 ### Added
 
@@ -12,7 +12,7 @@ Meaningful changes are recorded here. Source publication and a tagged GitHub rel
 - Interactive "Fix Your Blunders" practice mode: replay mistakes directly on the board with instant move validation, piece hints, and solution reveals.
 - Blunder puzzle exports: export mistakes from any game review as a multi-chapter PGN study collection or spaced-repetition Anki flashcard CSV (`Front,Back,Tags`).
 
-## 0.6.1 - Unreleased
+## 0.6.1 - 2026-11-27
 
 ### Fixed
 
