@@ -27,6 +27,13 @@ async function main(): Promise<void> {
       marker = undefined;
     }
     if (!marker) throw new Error('Desktop bundle is missing its embedded marker asset.');
+    // Point the service at the companions staged beside the executable.
+    const { dirname, join } = await import('node:path');
+    const home = dirname(process.execPath);
+    process.env.OPENCHESSLAB_STATIC_ROOT ??= join(home, 'client');
+    const runtime = join(home, process.platform === 'win32' ? 'node-runtime.exe' : 'node-runtime');
+    const { existsSync } = await import('node:fs');
+    if (existsSync(runtime)) process.env.OPENCHESSLAB_NODE ??= runtime;
   }
   const config = loadConfig();
   const engines = loadEngines();
@@ -63,4 +70,9 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+// No top-level await: the desktop entry is bundled to CommonJS for the
+// single-executable build, where top-level await is unsupported.
+void main().catch((error: unknown) => {
+  console.error(error instanceof Error ? (error.stack ?? error.message) : error);
+  process.exitCode = 1;
+});
