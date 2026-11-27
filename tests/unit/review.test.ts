@@ -112,4 +112,32 @@ describe('shared review assembly', () => {
     expect(black.averageLossCp).toBeNull();
     expect(black.accuracy).toBeNull();
   });
+  it('attaches opponent refutation line when a blunder or mistake occurs', () => {
+    const game = parseGame('1. f3 e5 2. g4 Qh4# 0-1');
+    const moveG4 = game.moves[2]!; // 2. g4
+    const beforeG4 = cp(-50, 'd2d4');
+    const afterG4: PositionAnalysis = {
+      score: { type: 'mate', value: 1, winner: 'b' },
+      depth: 10,
+      depthLimited: false,
+      bestMove: 'd8h4',
+      san: ['Qh4#'],
+    };
+    const annotation = annotateMove(moveG4, beforeG4, afterG4, 4, 0);
+    expect(annotation.classification).toBe('blunder');
+    expect(annotation.refutation).toBeDefined();
+    expect(annotation.refutation?.punishmentMove).toBe('d8h4');
+    expect(annotation.refutation?.punishmentSan).toBe('Qh4#');
+    expect(annotation.refutation?.lineSan).toEqual(['Qh4#']);
+
+    // When move is best, no refutation is attached
+    const bestAnnotation = annotateMove(
+      game.moves[0]!,
+      cp(20, 'e2e4'),
+      { ...cp(15, 'e7e5'), san: ['e5'] },
+      4,
+      0,
+    );
+    expect(bestAnnotation.refutation).toBeUndefined();
+  });
 });

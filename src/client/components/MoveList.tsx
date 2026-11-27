@@ -1,5 +1,16 @@
 import { useEffect, useRef } from 'react';
-import { Download, FileDown, List, Sparkles, Square } from 'lucide-react';
+import {
+  AlertTriangle,
+  BookOpen,
+  Download,
+  Eye,
+  FileDown,
+  GraduationCap,
+  List,
+  Sparkles,
+  Square,
+  Target,
+} from 'lucide-react';
 import type { GameData, GameMove, ReviewResult } from '../../shared/types';
 import { LabelGlyph } from './LabelGlyph';
 
@@ -13,6 +24,11 @@ export function MoveList({
   onReview,
   onExport,
   onExportReview,
+  onExportBlunderPgn,
+  onExportAnki,
+  onStartTraining,
+  showRefutation,
+  onToggleRefutation,
 }: {
   game: GameData;
   ply: number;
@@ -23,6 +39,11 @@ export function MoveList({
   onReview: () => void;
   onExport: () => void;
   onExportReview?: () => void;
+  onExportBlunderPgn?: () => void;
+  onExportAnki?: () => void;
+  onStartTraining?: () => void;
+  showRefutation?: boolean;
+  onToggleRefutation?: () => void;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const grouped = new Map<number, { w?: GameMove; b?: GameMove }>();
@@ -32,6 +53,13 @@ export function MoveList({
     group[move.color] = move;
     grouped.set(number, group);
   }
+
+  const activeAnnotation = review?.annotations.find((candidate) => candidate.ply === ply);
+  const blunderCount =
+    review?.annotations.filter(
+      (a) =>
+        !a.uncertain && ['blunder', 'mistake', 'miss'].includes(a.classification) && a.bestMove,
+    ).length ?? 0;
   useEffect(() => {
     const parent = scroll.current;
     const active = parent?.querySelector<HTMLElement>('[aria-current="step"]');
@@ -52,6 +80,26 @@ export function MoveList({
           Game notation
         </h3>
         <div className="notation-actions">
+          {review && onExportBlunderPgn && (
+            <button
+              className="icon-button small"
+              onClick={onExportBlunderPgn}
+              aria-label="Export blunder study PGN"
+              title="Export blunder study PGN"
+            >
+              <BookOpen size={15} />
+            </button>
+          )}
+          {review && onExportAnki && (
+            <button
+              className="icon-button small"
+              onClick={onExportAnki}
+              aria-label="Export Anki flashcards CSV"
+              title="Export Anki flashcards CSV"
+            >
+              <GraduationCap size={15} />
+            </button>
+          )}
           {review && onExportReview && (
             <button
               className="icon-button small"
@@ -119,6 +167,30 @@ export function MoveList({
           </div>
         )}
       </div>
+      {activeAnnotation?.refutation && (
+        <div className="refutation-banner" role="region" aria-label="Punishment sequence">
+          <div className="refutation-header">
+            <span className="refutation-badge">
+              <AlertTriangle size={13} />
+              Why this was a {activeAnnotation.classification}
+            </span>
+            {onToggleRefutation && (
+              <button
+                type="button"
+                className={`refutation-toggle-btn ${showRefutation ? 'active' : ''}`}
+                onClick={onToggleRefutation}
+                title="Toggle punishment arrow on board"
+              >
+                <Eye size={13} />
+                {showRefutation ? 'Hide punishment' : 'Show on board'}
+              </button>
+            )}
+          </div>
+          <p className="refutation-line">
+            Punishment: <strong>{activeAnnotation.refutation.lineSan.join(' ')}</strong>
+          </p>
+        </div>
+      )}
       <div className="review-footer">
         {review?.summary && (
           <div className="review-report">
@@ -188,6 +260,17 @@ export function MoveList({
           <p className="tiny muted review-progress" role="status">
             {progress}
           </p>
+        )}
+        {blunderCount > 0 && onStartTraining && (
+          <button
+            type="button"
+            className="button secondary training-start-btn"
+            onClick={onStartTraining}
+            title="Practice finding the best move for each mistake in this game"
+          >
+            <Target size={15} />
+            Practice {blunderCount} {blunderCount === 1 ? 'blunder' : 'blunders'}
+          </button>
         )}
         <button className="button review-button" disabled={!game.moves.length} onClick={onReview}>
           {busy ? <Square size={13} /> : <Sparkles size={15} />}

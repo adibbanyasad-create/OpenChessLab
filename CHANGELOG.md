@@ -2,6 +2,16 @@
 
 Meaningful changes are recorded here. Source publication and a tagged GitHub release are separate events; no release or deployment is implied by a version heading alone.
 
+## 0.7.0 - Unreleased
+
+### Added
+
+- Blunder refutation explainer: reviews compute and annotate the opponent's punishment sequence for inaccuracies, mistakes, misses, and blunders, with an on-board punishment arrow and explanation banner.
+- 1-click online game sync: import recent games directly from public Chess.com and Lichess user archives or direct game links with zero API keys or account requirements.
+- Tactical threat visualizer: null-move passing search detects and renders opponent threats with dedicated animated threat arrows.
+- Interactive "Fix Your Blunders" practice mode: replay mistakes directly on the board with instant move validation, piece hints, and solution reveals.
+- Blunder puzzle exports: export mistakes from any game review as a multi-chapter PGN study collection or spaced-repetition Anki flashcard CSV (`Front,Back,Tags`).
+
 ## 0.6.1 - Unreleased
 
 ### Fixed

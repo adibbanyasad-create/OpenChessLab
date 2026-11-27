@@ -695,3 +695,65 @@ test('keeps experiment and documentation views accessible and internal guides na
     })),
   ).toEqual([]);
 });
+
+test('presents online sync tab with Chess.com and Lichess support', async ({ page }) => {
+  await pauseAnalysis(page);
+  await page.getByRole('button', { name: 'Import game', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+
+  // Switch to online sync tab
+  const onlineTab = page.getByRole('button', { name: /Chess\.com \/ Lichess/ });
+  await expect(onlineTab).toBeVisible();
+  await onlineTab.click();
+
+  await expect(page.getByPlaceholder(/Enter Chess\.com username/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Chess.com', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Lichess', exact: true })).toBeVisible();
+
+  // Switch to Lichess
+  await page.getByRole('button', { name: 'Lichess', exact: true }).click();
+  await expect(page.getByPlaceholder(/Enter Lichess username/)).toBeVisible();
+
+  // Test direct URL input field
+  await expect(page.getByPlaceholder(/e\.g\. https:\/\/lichess\.org/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+});
+
+test('toggles threat visualizer arrow and interactive blunder retry', async ({ page }) => {
+  await pauseAnalysis(page);
+  await importPgn(page, '1. f3 e5 2. g4 Qh4# 0-1');
+
+  // Review the short mating game
+  await page.getByRole('button', { name: /Review this game/ }).click();
+  await expect(page.getByRole('button', { name: /Review again/ })).toBeVisible({ timeout: 25_000 });
+
+  // Navigate to 2. g4 blunder
+  await page.getByRole('button', { name: 'Go to move 2. g4', exact: true }).click();
+
+  // Check refutation banner display
+  const punishmentRegion = page.getByRole('region', { name: 'Punishment sequence' });
+  await expect(punishmentRegion).toBeVisible();
+  await expect(punishmentRegion.getByText('Qh4#')).toBeVisible();
+
+  // Threat visualizer button toggle
+  const threatBtn = page.getByRole('button', { name: /Show opponent threat/ });
+  await expect(threatBtn).toBeVisible();
+  await threatBtn.click();
+  await expect(page.getByRole('button', { name: /Hide opponent threat/ })).toBeVisible();
+
+  // Interactive Blunder Practice mode
+  const practiceBtn = page.getByRole('button', { name: /Practice \d+ blunder/ });
+  if (await practiceBtn.isVisible()) {
+    await practiceBtn.click();
+    await expect(page.getByRole('region', { name: 'Blunder practice mode' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Exit practice mode' })).toBeVisible();
+    await page.getByRole('button', { name: 'Exit practice mode' }).click();
+    await expect(page.getByRole('region', { name: 'Blunder practice mode' })).not.toBeVisible();
+  }
+
+  // Export blunder study and Anki buttons
+  await expect(page.getByRole('button', { name: 'Export blunder study PGN' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export Anki flashcards CSV' })).toBeVisible();
+});

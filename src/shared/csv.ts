@@ -81,12 +81,14 @@ export function reviewCsv(result: ReviewResult): string {
     'phase',
     'book_move',
     'best_move',
+    'punishment',
   ];
   const annotationByPly = new Map(
     result.annotations.map((annotation) => [annotation.ply, annotation]),
   );
   const rows = result.scores.map((point) => {
     const annotation = annotationByPly.get(point.ply);
+    const punishment = annotation?.refutation ? annotation.refutation.lineSan.join(' ') : null;
     return [
       point.ply,
       formatScore(point.score),
@@ -97,6 +99,7 @@ export function reviewCsv(result: ReviewResult): string {
       annotation?.phase ?? null,
       annotation ? annotation.bookMove : null,
       annotation?.bestMove ?? null,
+      punishment,
     ]
       .map(csvCell)
       .join(',');
