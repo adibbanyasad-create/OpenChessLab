@@ -30,17 +30,20 @@ for (let index = 0; index < count; index++) {
   const offset = ico.readUInt32LE(entry + 12);
   const png = ico.subarray(offset, offset + bytes);
   if (png[0] !== 0x89 || png[1] !== 0x50) throw new Error(`ICO entry ${index} is not a PNG image.`);
-  icons.push(Data.IconItem.from(png, width, height));
+  // PNG payloads ride as raw icon items; IconItem is BMP-only.
+  icons.push(
+    Data.RawIconItem.from(
+      png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength),
+      width,
+      height,
+      32,
+    ),
+  );
 }
 
 const executable = NtExecutable.from(await readFile(exePath));
 const resources = NtExecutableResource.from(executable);
-Resource.IconGroupEntry.replaceIconsForResource(
-  resources.entries,
-  1,
-  1033,
-  icons.map((item) => Data.RawIconItem.from(item.bin, item.width, item.height, 32)),
-);
+Resource.IconGroupEntry.replaceIconsForResource(resources.entries, 1, 1033, icons);
 const [fileMajor, fileMinor, filePatch] = [major, minor, patch];
 const versionInfo = Resource.VersionInfo.create(
   1033,
