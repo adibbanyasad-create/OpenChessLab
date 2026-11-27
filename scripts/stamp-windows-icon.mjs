@@ -88,9 +88,12 @@ if (!groups.length) throw new Error('Stamp verification failed: no icon group fo
 const items = groups[0].getIconItemsFromEntries(checkResources.entries);
 if (items.length !== icons.length)
   throw new Error(`Stamp verification failed: ${items.length}/${icons.length} icons present.`);
-const text = (await readFile(exePath)).toString('latin1');
+const bytes = await readFile(exePath);
+const text = bytes.toString('latin1');
+const wide = (value) => Buffer.from(value, 'utf16le').toString('latin1');
 for (const needle of ['OpenChessLab', `${fileMajor}.${fileMinor}.${filePatch}.0`]) {
-  if (!text.includes(needle)) throw new Error(`Stamp verification failed: ${needle} missing.`);
+  if (!text.includes(needle) && !text.includes(wide(needle)))
+    throw new Error(`Stamp verification failed: ${needle} missing.`);
 }
 console.log(
   `Stamped ${items.length} icons + version ${fileMajor}.${fileMinor}.${filePatch}.0 into ${exePath}.`,
