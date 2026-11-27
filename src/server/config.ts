@@ -1,8 +1,41 @@
 import { createRequire } from 'node:module';
-import { isAbsolute, resolve } from 'node:path';
-import { closeSync, openSync, readSync, type PathLike } from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { closeSync, existsSync, openSync, readSync, type PathLike } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import type { EngineDescriptor } from '../shared/types.js';
+
+// Resolves a bundled Stockfish engine script without importing the whole
+// `stockfish` package: the package's findEngine helper relies on its own
+// on-disk layout, which does not survive bundling into one file.
+function findBundledEngine(flavor: 'lite' | 'full'): string {
+  const file = flavor === 'lite' ? 'stockfish-19-lite.js' : 'stockfish-19.js';
+  const candidates = [
+    // Desktop executable layout: engines/ beside the binary. Checked first
+    // because import.meta is unavailable inside the bundled executable.
+    join(dirname(process.execPath), 'engines', file),
+  ];
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // Development / server layout: <root>/node_modules/stockfish/bin.
+    candidates.push(resolve(here, '..', '..', 'node_modules', 'stockfish', 'bin', file));
+  } catch {
+    /* Bundled runtime: import.meta has no URL; the engines/ check stands. */
+  }
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  // Last resort: ask the installed package, when one is resolvable.
+  try {
+    const require = createRequire(import.meta.url);
+    const stockfish = require('stockfish') as { findEngine: (flavor: string) => string };
+    return stockfish.findEngine(flavor);
+  } catch {
+    throw new Error(
+      `Cannot find ${file}. Set ENGINES_CONFIG or ship the engines/ directory beside the executable.`,
+    );
+  }
+}
 
 export interface EngineConfig extends EngineDescriptor {
   command: string;
@@ -64,24 +97,26 @@ export function readBoundedConfig(configPath: PathLike, maxBytes = 65_536): stri
 }
 
 export function loadEngines(configPath = process.env.ENGINES_CONFIG): EngineConfig[] {
-  const require = createRequire(import.meta.url);
-  const stockfish = require('stockfish') as { findEngine: (flavor: string) => string };
+  // Inside a single-executable build, process.execPath is the desktop app
+  // itself, which cannot run engine scripts. OPENCHESSLAB_NODE points at a
+  // real Node runtime; otherwise engine scripts run under execPath as usual.
+  const nodeRuntime = process.env.OPENCHESSLAB_NODE?.trim() || process.execPath;
   const engines: EngineConfig[] = [
     {
       id: 'stockfish-lite',
       name: 'Stockfish 19 Lite',
       description: 'Small neural network. Fast starts, multithreaded WASM.',
       kind: 'wasm',
-      command: process.execPath,
-      args: [stockfish.findEngine('lite')],
+      command: nodeRuntime,
+      args: [findBundledEngine('lite')],
     },
     {
       id: 'stockfish',
       name: 'Stockfish 19',
       description: 'Full neural network. Multithreaded WASM reference engine.',
       kind: 'wasm',
-      command: process.execPath,
-      args: [stockfish.findEngine('full')],
+      command: nodeRuntime,
+      args: [findBundledEngine('full')],
     },
   ];
   if (configPath) {
@@ -143,6 +178,6 @@ export function loadConfig(): ServerConfig {
       .filter(Boolean),
     apiToken,
     frameAncestors: frames.join(' '),
-    staticRoot: resolve('dist/client'),
+    staticRoot: process.env.OPENCHESSLAB_STATIC_ROOT?.trim() || resolve('dist/client'),
   };
 }

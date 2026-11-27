@@ -9,3 +9,7 @@ package-lock.json
 *.tgz
 *.tar.gz
 SHA256SUMS.txt
+android/app/src/main/assets/
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/

@@ -34,6 +34,8 @@ import {
   ShieldCheck,
   Terminal,
   Upload,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import { Chess } from 'chess.js';
@@ -46,6 +48,9 @@ import type {
   SearchSettings,
 } from '../shared/types';
 import { api, downloadFile, getToken, setToken } from './api';
+import { nativeConfirmExit, nativeTap, useNativeChrome } from './native';
+import { isSoundEnabled, playSound, setSoundEnabled } from './sounds';
+import { isOfflineEngineAvailable, useOfflineJob } from './offlineEngine';
 import { useRemoteJob } from './useRemoteJob';
 import { BrandMark, ChessPiece } from './components/ChessPiece';
 import { ChessBoard } from './components/ChessBoard';
@@ -117,8 +122,15 @@ export function App() {
   const [reviewedPgn, setReviewedPgn] = useState('');
   const [toast, setToast] = useState('');
   const [doc, setDoc] = useState('overview');
+  const [sound, setSound] = useState(isSoundEnabled);
+  const announcedReview = useRef('');
   const analysis = useRemoteJob<AnalysisResult>();
   const reviewJob = useRemoteJob<ReviewResult>();
+  const offline = useOfflineJob();
+  useNativeChrome();
+  useEffect(() => nativeConfirmExit(() => window.close()), []);
+  const OFFLINE_ID = 'stockfish-offline';
+  const offlineActive = engineId === OFFLINE_ID;
   const fen = game.positions[ply] ?? game.initialFen;
   const chess = new Chess(fen);
   const isSample = game.headers.Event === 'A Night at the Opera';
@@ -127,12 +139,20 @@ export function App() {
     Object.entries(settings.options ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
   );
   const searchKey = `${fen}|${engineId}|${settings.depth}|${settings.threads}|${settings.hash}|${settings.multiPv}|${customOptionsKey}`;
-  const result =
+  const remoteResult =
     searchedKey === searchKey && analysis.job?.result?.fen === fen
       ? analysis.job.result
       : undefined;
+  const offlineResult =
+    searchedKey === searchKey && offline.result?.fen === fen ? offline.result : undefined;
+  const result = offlineActive ? offlineResult : remoteResult;
   const lines =
-    searchedKey === searchKey ? (result?.lines ?? analysis.job?.progress.lines ?? []) : [];
+    searchedKey === searchKey
+      ? (result?.lines ?? (offlineActive ? offline.lines : (analysis.job?.progress.lines ?? [])))
+      : [];
+  const analysisBusy = offlineActive ? offline.busy : analysis.busy;
+  const analysisError = offlineActive ? offline.error : analysis.error;
+  const analysisStopped = offlineActive ? offline.stopped : analysis.stopped;
   const currentScore = lines[0]?.score ?? review?.scores[ply]?.score;
   const reviewBusy = reviewJob.busy;
   const setPly = (next: number) =>
@@ -160,8 +180,24 @@ export function App() {
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          setConnection('Connection needed');
-          setConnectionError(error instanceof Error ? error.message : 'Unable to connect.');
+          // No server: fall back to the bundled offline engine so the
+          // installable apps and server-less previews keep working.
+          if (isOfflineEngineAvailable()) {
+            setEngines([
+              {
+                id: OFFLINE_ID,
+                name: 'Stockfish 19 Lite (offline)',
+                description: 'Runs on this device. Single-threaded, no server needed.',
+                kind: 'wasm',
+              },
+            ]);
+            setEngineId(OFFLINE_ID);
+            setConnection('Offline engine ready');
+            setConnectionError('');
+          } else {
+            setConnection('Connection needed');
+            setConnectionError(error instanceof Error ? error.message : 'Unable to connect.');
+          }
         }
       });
     return () => controller.abort();
@@ -181,12 +217,37 @@ export function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    if (!review || reviewJob.busy || announcedReview.current === reviewedPgn) return;
+    announcedReview.current = reviewedPgn;
+    const brilliant = review.annotations.some(
+      (annotation) => !annotation.uncertain && annotation.classification === 'brilliant',
+    );
+    playSound(brilliant ? 'brilliant' : 'review');
+  }, [review, reviewJob.busy, reviewedPgn]);
+
+  const toggleSound = () => {
+    const next = !sound;
+    setSound(next);
+    setSoundEnabled(next);
+    if (next) playSound('select');
+  };
+
   const startAnalysis = () => {
     setSearchedKey(searchKey);
+    if (offlineActive) {
+      void offline.run({
+        fen,
+        depth: Math.min(settings.depth, 18),
+        multiPv: settings.multiPv,
+        timeLimitMs: 3_000,
+      });
+      return;
+    }
     void analysis.run('/analysis', { fen, engineId, ...settings });
   };
   const autoAnalyze = useEffectEvent(startAnalysis);
-  const cancelAnalysis = analysis.cancel;
+  const cancelAnalysis = offlineActive ? offline.cancel : analysis.cancel;
   useEffect(() => {
     const timer =
       live && view === 'analysis' && !reviewBusy && engines.length
@@ -250,6 +311,7 @@ export function App() {
     moveFocus.current = null;
     reviewIntent.current++;
     void analysis.cancel();
+    void offline.cancel();
     void reviewJob.cancel();
     setReviewedPgn('');
     setSearchedKey('');
@@ -262,6 +324,7 @@ export function App() {
     try {
       changeGame(branchGame(game, ply, move));
       moveFocus.current = move.slice(2, 4);
+      nativeTap();
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'This move is not legal.');
     }
@@ -270,6 +333,7 @@ export function App() {
     if (next !== 'analysis') {
       reviewIntent.current++;
       void analysis.cancel();
+      void offline.cancel();
       void reviewJob.cancel();
     }
     setView(next);
@@ -283,6 +347,10 @@ export function App() {
     const intent = ++reviewIntent.current;
     if (reviewJob.busy) {
       await reviewJob.cancel();
+      return;
+    }
+    if (offlineActive) {
+      setToast('Game reviews need the engine service. Analysis works offline.');
       return;
     }
     setLive(false);
@@ -441,6 +509,15 @@ export function App() {
             <span className="topbar-divider" />
             <button
               className="icon-button"
+              onClick={toggleSound}
+              aria-label={sound ? 'Mute sounds' : 'Enable sounds'}
+              aria-pressed={sound}
+              title={sound ? 'Mute sounds' : 'Enable sounds'}
+            >
+              {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+            <button
+              className="icon-button"
               onClick={() => setDialog('shortcuts')}
               aria-label="Keyboard shortcuts"
               title="Keyboard shortcuts"
@@ -540,7 +617,9 @@ export function App() {
                           </button>
                         </div>
                       </div>
-                      <div className="player-row top-player">
+                      <div
+                        className={`player-row top-player ${chess.turn() === (flipped ? 'w' : 'b') ? 'side-to-move' : ''}`}
+                      >
                         <span
                           className={`player-avatar ${flipped ? 'white-player' : 'black-player'}`}
                         >
@@ -581,7 +660,9 @@ export function App() {
                         bestMove={result?.bestMove ?? lines[0]?.pv[0]}
                         showArrow={showArrow}
                       />
-                      <div className="player-row bottom-player">
+                      <div
+                        className={`player-row bottom-player ${chess.turn() === (flipped ? 'b' : 'w') ? 'side-to-move' : ''}`}
+                      >
                         <span
                           className={`player-avatar ${flipped ? 'black-player' : 'white-player'}`}
                         >
@@ -705,15 +786,16 @@ export function App() {
                       setSettings={setSettings}
                       lines={lines}
                       result={result}
-                      busy={analysis.busy}
-                      error={searchedKey === searchKey ? analysis.error : ''}
-                      stopped={searchedKey === searchKey && analysis.stopped}
+                      busy={analysisBusy}
+                      error={searchedKey === searchKey ? analysisError : ''}
+                      stopped={searchedKey === searchKey && analysisStopped}
                       live={live}
                       setLive={setLive}
                       run={startAnalysis}
                       stop={() => {
                         setLive(false);
-                        void analysis.cancel();
+                        if (offlineActive) void offline.cancel();
+                        else void analysis.cancel();
                       }}
                       onMove={playMove}
                       onDocs={() => openDocs('configuration')}

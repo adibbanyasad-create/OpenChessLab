@@ -204,4 +204,38 @@ describe('score semantics', () => {
       ).lossCp,
     ).toBe(0);
   });
+  it('celebrates delivered mates and near-perfect sacrifices as brilliant', () => {
+    expect(
+      classifyMove(
+        { type: 'mate', value: 2, winner: 'w' },
+        { type: 'mate', value: 0, winner: 'w' },
+        'w',
+        true,
+      ),
+    ).toEqual({ classification: 'brilliant', lossCp: 0, uncertain: false });
+    expect(
+      classifyMove(
+        { type: 'mate', value: 2, winner: 'w' },
+        { type: 'mate', value: 1, winner: 'w' },
+        'w',
+      ).classification,
+    ).toBe('brilliant');
+    expect(
+      classifyMove({ type: 'cp', value: 100 }, { type: 'cp', value: 92 }, 'w', false, false, {
+        sacrifice: true,
+      }),
+    ).toEqual({ classification: 'brilliant', lossCp: 8, uncertain: false });
+    expect(
+      classifyMove({ type: 'cp', value: 100 }, { type: 'cp', value: 60 }, 'w', false, false, {
+        sacrifice: true,
+      }).classification,
+    ).toBe('excellent');
+    expect(
+      classifyMove(
+        { type: 'mate', value: 4, winner: 'w' },
+        { type: 'mate', value: 3, winner: 'w' },
+        'w',
+      ).classification,
+    ).not.toBe('brilliant');
+  });
 });

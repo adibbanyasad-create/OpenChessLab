@@ -25,6 +25,21 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Think one move further.' })).toBeVisible();
 });
 
+test('toggles synthesized sounds without page errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await pauseAnalysis(page);
+  const toggle = page.getByRole('button', { name: /sounds/ });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(toggle).toHaveAccessibleName('Enable sounds');
+  expect(await page.evaluate(() => localStorage.getItem('ocl-sound-v1'))).toBe('off');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  expect(errors).toEqual([]);
+});
+
 test('loads a real UCI evaluation and configurable principal variations', async ({
   page,
 }, info) => {
@@ -191,8 +206,16 @@ test('reviews a real game and visualizes its measured turning points', async ({ 
   await expect(page.getByRole('button', { name: 'Go to move 2. g4', exact: true })).toHaveClass(
     /blunder/,
   );
+  await expect(
+    page
+      .getByRole('button', { name: 'Go to move 2. g4', exact: true })
+      .getByRole('img', { name: 'Blunder' }),
+  ).toBeVisible();
   await expect(page.getByRole('img', { name: /Game evaluation by half-move/ })).toBeVisible();
   await expect(page.locator('.review-summary')).toContainText('blunders');
+  await expect(page.locator('.review-summary .label-glyph.kind-blunder')).toBeVisible();
+  await expect(page.locator('.chart-marker.bad')).not.toHaveCount(0);
+  await expect(page.locator('.chart-marker.bad', { hasText: '??' })).toHaveCount(1);
   await expect(page.locator('.review-report')).toContainText('accuracy');
   await expect(page.locator('.review-opening')).toBeVisible();
   await expect(page.locator('.error-message')).toHaveCount(0);
@@ -254,6 +277,25 @@ test('compares two real engines and exports measured JSON and CSV', async ({ pag
   const csvPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV' }).click();
   expect((await csvPromise).suggestedFilename()).toMatch(/\.csv$/);
+});
+
+test('analyzes fully offline when the engine service is unreachable', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.getByRole('checkbox', { name: 'Live analysis' }).uncheck();
+  await page.route('**/api/**', (route) => route.abort('failed'));
+  await page.reload();
+  await page.getByRole('checkbox', { name: 'Live analysis' }).uncheck();
+  await expect(page.locator('.connection-status')).toContainText('Offline engine ready', {
+    timeout: 15_000,
+  });
+  await expect(page.locator('#engine-select')).toHaveValue('stockfish-offline');
+  await expect(page.locator('.engine-picker .tiny')).toContainText('On-device worker');
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await expect(page.getByTestId('engine-score')).not.toHaveText('—', { timeout: 45_000 });
+  await expect(page.locator('.variation').first()).toBeVisible();
+  await expect(page.locator('.status-label').first()).toHaveText('Complete');
+  expect(errors).toEqual([]);
 });
 
 test('runs Suite v1 and downloads a verifiable experiment bundle', async ({ page }) => {

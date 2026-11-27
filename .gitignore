@@ -14,3 +14,10 @@ SHA256SUMS.txt
 .DS_Store
 .cache/
 artifacts/
+# Capacitor generated output (the android/ shell itself is committed).
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/
+android/capacitor-cordova-android-plugins/

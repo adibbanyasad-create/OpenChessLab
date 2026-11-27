@@ -42,11 +42,11 @@ The evaluation timeline appears after a completed review. Select a point to navi
 Labels estimate centipawn loss for the player who moved, comparing the evaluation before and after the move. These are documented OpenChessLab heuristics, not chess.com's proprietary Game Review scores. Classifications are:
 
 - Book: played within the recognized opening-name table.
-- Brilliant (!!): engine best move with a capture/check and a decisive evaluation.
+- Brilliant (!!): engine best move with a capture/check and a decisive evaluation, a delivered mate (mate-in-1 or faster), or a sacrifice within 15 cp of perfect.
 - Best: exactly the engine's recommended move.
 - Great (!): effectively no measured loss, including strong non-best continuations.
 - Excellent (!): roughly 25–69 cp estimated loss.
-- Good: roughly 10–24 cp estimated loss.
+- Good: roughly 10–24 cp estimated loss, or any move whose adjacent evaluations did not confirm the requested depth (shown with `~` and no invented loss).
 - Inaccuracy (?!): roughly 70–149 cp estimated loss.
 - Mistake (?): roughly 150–299 cp estimated loss.
 - Miss (?): a lost mating opportunity at mistake-level loss or worse.
