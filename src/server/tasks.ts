@@ -1,13 +1,7 @@
 import { availableParallelism, arch, platform } from 'node:os';
 import { performance } from 'node:perf_hooks';
-import {
-  classifyMove,
-  gamePhase,
-  meanScoreCp,
-  reviewAccuracy,
-  scoreDisagreementCp,
-} from '../shared/chess.js';
-import { openingFromMoves } from '../shared/openings.js';
+import { meanScoreCp, scoreDisagreementCp } from '../shared/chess.js';
+import { assembleReview, type PositionAnalysis } from '../shared/review.js';
 import { identifySuite } from '../shared/suites.js';
 import type { AnalysisRequest, BenchmarkRequest, ReviewRequest } from '../shared/schemas.js';
 import type { BenchmarkResult, GameData, JobProgress, ReviewResult } from '../shared/types.js';
@@ -49,17 +43,9 @@ export async function reviewGame(
   const engine = new UciEngine(config);
   const started = performance.now();
   const { depth, threads, hash, multiPv } = request;
-  const result: ReviewResult = {
-    engineId: config.id,
-    settings: { depth, threads, hash, multiPv },
-    scores: [],
-    annotations: [],
-    elapsedMs: 0,
-  };
+  const positions: PositionAnalysis[] = [];
   try {
     await engine.start(request, signal);
-    const opening = openingFromMoves(game.moves);
-    let previous: Awaited<ReturnType<UciEngine['analyze']>> | undefined;
     for (const [ply, fen] of game.positions.entries()) {
       signal.throwIfAborted();
       progress({
@@ -68,82 +54,23 @@ export async function reviewGame(
         message: `Reviewing position ${ply + 1} of ${game.positions.length}`,
       });
       const analysis = await engine.analyze(fen, signal, undefined, 1_500);
-      const score = analysis.lines[0]!.score;
-      result.scores.push({
-        ply,
-        score,
+      positions.push({
+        score: analysis.lines[0]!.score,
         depth: analysis.completedDepth,
         depthLimited: analysis.depthLimited,
+        bestMove: analysis.bestMove,
       });
-      const move = game.moves[ply - 1];
-      if (previous && move) {
-        const uci = move.from + move.to + (move.promotion ?? '');
-        // A classification is only meaningful when both adjacent evaluations reached
-        // their requested depth. Otherwise report the move as uncertain instead of
-        // inventing a blunder/mistake from a timed-out search.
-        const uncertain = previous.depthLimited || analysis.depthLimited;
-        const before = previous.lines[0]!.score;
-        const mateOpportunityMissed =
-          before.type === 'mate' && before.winner === move.color && score.type !== 'mate';
-        const sacrifice =
-          !uncertain &&
-          previous.bestMove === uci &&
-          before.type === 'cp' &&
-          score.type === 'cp' &&
-          Math.abs(score.value) > 150 &&
-          (move.san.includes('x') || move.san.includes('+'));
-        result.annotations.push({
-          ply,
-          san: move.san,
-          bestMove: previous.bestMove,
-          phase: gamePhase(ply, game.positions.length - 1),
-          bookMove: ply <= (opening?.plies ?? 0),
-          ...classifyMove(before, score, move.color, previous.bestMove === uci, uncertain, {
-            bookMove: ply <= (opening?.plies ?? 0),
-            mateOpportunityMissed,
-            sacrifice,
-          }),
-        });
-      }
-      previous = analysis;
     }
-    const summarize = (color: 'w' | 'b') => {
-      const moves = result.annotations.filter((_, index) => game.moves[index]?.color === color);
-      const losses = moves.map((annotation) => annotation.lossCp);
-      const counts = {
-        brilliant: 0,
-        great: 0,
-        best: 0,
-        excellent: 0,
-        good: 0,
-        book: 0,
-        inaccuracy: 0,
-        mistake: 0,
-        miss: 0,
-        blunder: 0,
-      };
-      for (const annotation of moves) counts[annotation.classification]++;
-      const confident = losses.filter((loss): loss is number => loss !== null);
-      return {
-        color,
-        moves: moves.length,
-        confidentMoves: confident.length,
-        uncertainMoves: moves.length - confident.length,
-        averageLossCp: confident.length
-          ? Math.round((confident.reduce((sum, loss) => sum + loss, 0) / confident.length) * 10) /
-            10
-          : null,
-        accuracy: reviewAccuracy(losses),
-        counts,
-      };
+    return {
+      ...assembleReview(
+        game,
+        positions,
+        config.id,
+        { depth, threads, hash, multiPv },
+        Math.round(performance.now() - started),
+      ),
+      warnings: [],
     };
-    result.summary = {
-      ...(opening ? { opening } : {}),
-      white: summarize('w'),
-      black: summarize('b'),
-    };
-    result.elapsedMs = Math.round(performance.now() - started);
-    return result;
   } finally {
     await engine.close();
   }

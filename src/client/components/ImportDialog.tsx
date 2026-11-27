@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { FileUp, Upload, ClipboardPaste, ArrowRight } from 'lucide-react';
 import { api } from '../api';
-import { gameFromFen, OPERA_PGN } from '../../shared/chess';
+import { gameFromFen, OPERA_PGN, parseGame } from '../../shared/chess';
 import type { GameData } from '../../shared/types';
 import { LIMITS } from '../../shared/limits';
 import { Modal } from './Modal';
@@ -24,13 +24,20 @@ export function ImportDialog({
     setError('');
     setBusy(true);
     try {
-      const game =
-        tab === 'fen'
-          ? gameFromFen(text.trim())
-          : await api<GameData>('/games/parse', {
-              method: 'POST',
-              body: JSON.stringify({ pgn: text }),
-            });
+      let game: GameData;
+      if (tab === 'fen') {
+        game = gameFromFen(text.trim());
+      } else {
+        try {
+          game = await api<GameData>('/games/parse', {
+            method: 'POST',
+            body: JSON.stringify({ pgn: text }),
+          });
+        } catch {
+          // Offline fallback: the shared parser validates identically.
+          game = parseGame(text);
+        }
+      }
       onImport(game);
       onClose();
     } catch (reason) {

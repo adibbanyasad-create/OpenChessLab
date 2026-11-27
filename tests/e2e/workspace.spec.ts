@@ -298,6 +298,32 @@ test('analyzes fully offline when the engine service is unreachable', async ({ p
   expect(errors).toEqual([]);
 });
 
+test('reviews a game fully offline with a dead API', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.getByRole('checkbox', { name: 'Live analysis' }).uncheck();
+  await page.route('**/api/**', (route) => route.abort('failed'));
+  await page.reload();
+  await page.getByRole('checkbox', { name: 'Live analysis' }).uncheck();
+  await expect(page.locator('.connection-status')).toContainText('Offline engine ready', {
+    timeout: 15_000,
+  });
+  await importPgn(page, '1. f3 e5 2. g4 Qh4# 0-1');
+  await page.getByRole('button', { name: /Review this game/ }).click();
+  await expect(page.getByRole('button', { name: /Review again/ })).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole('button', { name: 'Go to move 2. g4', exact: true })).toHaveClass(
+    /blunder/,
+  );
+  await expect(
+    page
+      .getByRole('button', { name: 'Go to move 2. g4', exact: true })
+      .getByRole('img', { name: 'Blunder' }),
+  ).toBeVisible();
+  await expect(page.locator('.review-summary')).toContainText('blunders');
+  await expect(page.locator('.review-disclaimer')).toContainText('on this device');
+  expect(errors).toEqual([]);
+});
+
 test('runs Suite v1 and downloads a verifiable experiment bundle', async ({ page }) => {
   await pauseAnalysis(page);
   await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
