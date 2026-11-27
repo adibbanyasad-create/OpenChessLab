@@ -41,7 +41,9 @@ for (let index = 0; index < count; index++) {
   );
 }
 
-const executable = NtExecutable.from(await readFile(exePath));
+// The Node binary ships Authenticode-signed; modifying resources invalidates
+// that signature by design, so parse with the certificate ignored.
+const executable = NtExecutable.from(await readFile(exePath), { ignoreCert: true });
 const resources = NtExecutableResource.from(executable);
 Resource.IconGroupEntry.replaceIconsForResource(resources.entries, 1, 1033, icons);
 const [fileMajor, fileMinor, filePatch] = [major, minor, patch];
@@ -79,7 +81,7 @@ executable.setResource(resources.entries);
 await writeFile(exePath, Buffer.from(executable.generate()));
 
 // Verify by re-reading: the icon group and version strings must be present.
-const check = NtExecutable.from(await readFile(exePath));
+const check = NtExecutable.from(await readFile(exePath), { ignoreCert: true });
 const checkResources = NtExecutableResource.from(check);
 const groups = Resource.IconGroupEntry.fromEntries(checkResources.entries);
 if (!groups.length) throw new Error('Stamp verification failed: no icon group found.');
