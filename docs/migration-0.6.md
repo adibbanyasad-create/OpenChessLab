@@ -1,7 +1,9 @@
 # Migrating to 0.6
 
 Version 0.6 adds the alive review experience, the offline engine, and native
-packaging. There are no API or bundle contract changes.
+packaging. There are no API or bundle contract changes. Review results gain
+an optional `warnings` array (offline reviews note their single-threaded
+provenance there); consumers that tolerate unknown fields are unaffected.
 
 ## Content Security Policy
 
@@ -30,9 +32,13 @@ are historical facts; only new reviews use the widened rule.
 ## Native Packages
 
 - Android: debug APKs are unsigned CI artifacts for sideloading and testing,
-  not Play releases. They run the offline engine only.
+  not Play releases. They run analysis and full game reviews on-device with
+  the offline engine; comparisons and benchmarks need the engine service.
+  Release APKs attach to draft releases and use `ANDROID_*` signing secrets
+  when configured, else the debug key for testing only.
 - Desktop: the `.exe` embeds the server and opens the system browser. Engine
   searches spawn `OPENCHESSLAB_NODE` when set, else the launched runtime.
+  The Windows bundle (exe, client, engines, runtime) attaches to releases.
 
 See [installation](installation.md) for platform setup and
 [usage](usage.md) for the review label reference.

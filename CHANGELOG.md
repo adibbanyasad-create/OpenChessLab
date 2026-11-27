@@ -12,10 +12,19 @@ Meaningful changes are recorded here. Source publication and a tagged GitHub rel
 - Desktop single-file executable builder (Node SEA): double-click `.exe` starts the loopback service and opens the workspace; Windows smoke test runs a real search.
 - Native build matrix workflow (`.github/workflows/native.yml`) covering the APK and the Windows executable on every relevant change.
 - Delivered mates and near-perfect sacrifices now earn the brilliant label; thresholds stay documented and heuristic.
+- Full offline game reviews: sequential on-device searches assembled with the shared review module, so the APK reviews games with identical classification semantics.
+- Release APK and Windows desktop bundle attached to draft releases, with optional release signing via secrets.
+
+### Fixed
+
+- PGN import falls back to the shared parser when the API is unreachable, so offline imports keep working.
+- Comparisons and benchmarks explain they need the engine service instead of failing mid-run when only the offline engine exists.
+- Android back button exits via the native App API (double-tap) instead of the no-op `window.close()`.
+- The offline engine worker bundles in-process with a pinned esbuild instead of shelling out to a transitive binary.
 
 ### Compatibility
 
-No API or bundle contract changes. The content security policy gains `worker-src 'self'` and script `wasm-unsafe-eval` for the offline engine; `.wasm` responses carry `application/wasm`. See [migration notes](docs/migration-0.6.md).
+No API or bundle contract changes. Review results gain an optional `warnings` array for provenance notes. The content security policy gains `worker-src 'self'` and script `wasm-unsafe-eval` for the offline engine; `.wasm` responses carry `application/wasm`. See [migration notes](docs/migration-0.6.md).
 
 ## 0.5.0 - Unreleased
 
