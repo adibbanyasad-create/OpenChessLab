@@ -56,6 +56,7 @@ jobs:
     name: Release APK
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    needs: [release]
     permissions:
       contents: write
     steps:
@@ -91,16 +92,13 @@ jobs:
           NAME="OpenChessLab-${GITHUB_REF_NAME}-android.apk"
           cp "$APK" "$NAME"
           sha256sum "$NAME" | tee "$NAME.sha256"
-          for attempt in 1 2 3 4 5 6; do
-            gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break
-            sleep 20
-          done
           gh release upload "$GITHUB_REF_NAME" "$NAME" "$NAME.sha256" --clobber
 
   desktop:
     name: Release EXE
     runs-on: windows-latest
     timeout-minutes: 25
+    needs: [release]
     permissions:
       contents: write
     defaults:
@@ -124,12 +122,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          Compress-Archive -Path dist/desktop/* -DestinationPath OpenChessLab-${{ github.ref_name }}-windows.zip -Force
-          $hash = (Get-FileHash OpenChessLab-${{ github.ref_name }}-windows.zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  OpenChessLab-${{ github.ref_name }}-windows.zip" | Out-File -Encoding ascii "OpenChessLab-${{ github.ref_name }}-windows.zip.sha256"
-          for ($attempt = 1; $attempt -le 6; $attempt++) {
-            gh release view "${{ github.ref_name }}" 2>$null
-            if ($LASTEXITCODE -eq 0) { break }
-            Start-Sleep -Seconds 20
-          }
-          gh release upload "${{ github.ref_name }}" "OpenChessLab-${{ github.ref_name }}-windows.zip" "OpenChessLab-${{ github.ref_name }}-windows.zip.sha256" --clobber
+          Compress-Archive -Path dist/desktop/* -DestinationPath "OpenChessLab-${{ github.ref_name }}-windows.zip" -Force
+          $zip = "OpenChessLab-${{ github.ref_name }}-windows.zip"
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zip" | Out-File -Encoding ascii "$zip.sha256" -NoNewline
+          Add-Content "$zip.sha256" ""
+          gh release upload "${{ github.ref_name }}" $zip "$zip.sha256" --clobber
