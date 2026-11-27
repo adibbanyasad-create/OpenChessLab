@@ -1,0 +1,125 @@
+name: Native Builds
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'scripts/build-desktop.mjs'
+      - 'scripts/smoke-desktop.mjs'
+      - 'scripts/make-launcher-icons.mjs'
+      - 'src/server/desktop.ts'
+      - 'src/client/engine-worker.ts'
+      - 'src/client/offlineEngine.ts'
+      - 'src/client/native.ts'
+      - 'src/shared/uci-parse.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/native.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'scripts/build-desktop.mjs'
+      - 'scripts/smoke-desktop.mjs'
+      - 'scripts/make-launcher-icons.mjs'
+      - 'src/server/desktop.ts'
+      - 'src/client/engine-worker.ts'
+      - 'src/client/offlineEngine.ts'
+      - 'src/client/native.ts'
+      - 'src/shared/uci-parse.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android APK (debug)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bad3a2b3e47722a69d4d # v5.1.0
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify APK contents
+        run: |
+          APK=$(find android/app/build/outputs/apk -name '*.apk' | head -1)
+          test -n "$APK"
+          echo "APK=$APK"
+          unzip -l "$APK" | grep -E 'lib/|assets/public/index.html|assets/public/engine/stockfish-19-lite-single.wasm|classes.dex' | head -8
+          test -n "$(unzip -l "$APK" | grep 'assets/public/index.html')"
+          test -n "$(unzip -l "$APK" | grep 'assets/public/engine/stockfish-19-lite-single.wasm')"
+          test -n "$(unzip -l "$APK" | grep 'classes.dex')"
+          sha256sum "$APK" | tee apk-sha256.txt
+      - name: Preserve debug APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openchesslab-debug-apk
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            apk-sha256.txt
+          retention-days: 7
+
+  desktop:
+    name: Desktop EXE (Windows SEA)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/build-desktop.mjs
+      - name: Smoke-test the executable
+        run: node scripts/smoke-desktop.mjs dist/desktop/OpenChessLab.exe 3210
+      - name: Preserve desktop executable
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openchesslab-windows-exe
+          path: |
+            dist/desktop/OpenChessLab.exe
+            dist/desktop/OpenChessLab.exe.sha256
+          retention-days: 7
+
+  required:
+    name: Native Checks Passed
+    if: always()
+    needs: [android, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all native jobs
+        env:
+          ANDROID_RESULT: ${{ needs.android.result }}
+          DESKTOP_RESULT: ${{ needs.desktop.result }}
+        run: test "$ANDROID_RESULT" = success && test "$DESKTOP_RESULT" = success
