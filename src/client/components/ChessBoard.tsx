@@ -1,9 +1,10 @@
-import { useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Chess, type PieceSymbol, type Square } from 'chess.js';
 import { formatScore, scoreCp, squareName } from '../../shared/chess';
 import type { Score } from '../../shared/types';
 import { ChessPiece } from './ChessPiece';
 import { Modal } from './Modal';
+import { playSound } from '../sounds';
 
 const names: Record<PieceSymbol, string> = {
   p: 'pawn',
@@ -32,6 +33,18 @@ export function ChessBoard({
   showArrow: boolean;
 }) {
   const chess = new Chess(fen);
+  const previousFen = useRef(fen);
+  useEffect(() => {
+    if (previousFen.current === fen) return;
+    const before = new Chess(previousFen.current);
+    const after = new Chess(fen);
+    const captured =
+      after.board().flat().filter(Boolean).length < before.board().flat().filter(Boolean).length;
+    previousFen.current = fen;
+    if (after.isCheckmate() || after.isCheck()) playSound('check');
+    else if (captured) playSound('capture');
+    else playSound('move');
+  }, [fen]);
   const [selected, setSelected] = useState<Square | null>(null);
   const [promotion, setPromotion] = useState<{ from: Square; to: Square }>();
   const [focused, setFocused] = useState<Square>('e4');
@@ -135,13 +148,25 @@ export function ChessBoard({
             >
               {index % 8 === 0 && <span className="rank-label">{square[1]}</span>}
               {index >= 56 && <span className="file-label">{square[0]}</span>}
-              {piece && <ChessPiece type={piece.type} color={piece.color} />}
+              {piece && (
+                <span
+                  key={`${piece.type}${piece.color}`}
+                  className={`piece-motion ${lastMove?.to === square ? 'just-moved' : ''}`}
+                >
+                  <ChessPiece type={piece.type} color={piece.color} />
+                </span>
+              )}
               {target && <span className={piece ? 'legal-ring' : 'legal-dot'} />}
             </button>
           );
         })}
         {showArrow && arrowFrom && arrowTo && (
-          <svg viewBox="0 0 800 800" className="board-arrow" aria-hidden="true">
+          <svg
+            viewBox="0 0 800 800"
+            className="board-arrow"
+            aria-hidden="true"
+            key={`${bestMove}-${flipped ? 'f' : 'w'}`}
+          >
             <defs>
               <marker
                 id="arrowhead"

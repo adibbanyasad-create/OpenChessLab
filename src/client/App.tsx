@@ -34,6 +34,8 @@ import {
   ShieldCheck,
   Terminal,
   Upload,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import { Chess } from 'chess.js';
@@ -46,6 +48,7 @@ import type {
   SearchSettings,
 } from '../shared/types';
 import { api, downloadFile, getToken, setToken } from './api';
+import { isSoundEnabled, playSound, setSoundEnabled } from './sounds';
 import { useRemoteJob } from './useRemoteJob';
 import { BrandMark, ChessPiece } from './components/ChessPiece';
 import { ChessBoard } from './components/ChessBoard';
@@ -117,6 +120,8 @@ export function App() {
   const [reviewedPgn, setReviewedPgn] = useState('');
   const [toast, setToast] = useState('');
   const [doc, setDoc] = useState('overview');
+  const [sound, setSound] = useState(isSoundEnabled);
+  const announcedReview = useRef('');
   const analysis = useRemoteJob<AnalysisResult>();
   const reviewJob = useRemoteJob<ReviewResult>();
   const fen = game.positions[ply] ?? game.initialFen;
@@ -180,6 +185,22 @@ export function App() {
     const timer = setTimeout(() => setToast(''), 4_000);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (!review || reviewJob.busy || announcedReview.current === reviewedPgn) return;
+    announcedReview.current = reviewedPgn;
+    const brilliant = review.annotations.some(
+      (annotation) => !annotation.uncertain && annotation.classification === 'brilliant',
+    );
+    playSound(brilliant ? 'brilliant' : 'review');
+  }, [review, reviewJob.busy, reviewedPgn]);
+
+  const toggleSound = () => {
+    const next = !sound;
+    setSound(next);
+    setSoundEnabled(next);
+    if (next) playSound('select');
+  };
 
   const startAnalysis = () => {
     setSearchedKey(searchKey);
@@ -441,6 +462,15 @@ export function App() {
             <span className="topbar-divider" />
             <button
               className="icon-button"
+              onClick={toggleSound}
+              aria-label={sound ? 'Mute sounds' : 'Enable sounds'}
+              aria-pressed={sound}
+              title={sound ? 'Mute sounds' : 'Enable sounds'}
+            >
+              {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+            <button
+              className="icon-button"
               onClick={() => setDialog('shortcuts')}
               aria-label="Keyboard shortcuts"
               title="Keyboard shortcuts"
@@ -540,7 +570,9 @@ export function App() {
                           </button>
                         </div>
                       </div>
-                      <div className="player-row top-player">
+                      <div
+                        className={`player-row top-player ${chess.turn() === (flipped ? 'w' : 'b') ? 'side-to-move' : ''}`}
+                      >
                         <span
                           className={`player-avatar ${flipped ? 'white-player' : 'black-player'}`}
                         >
@@ -581,7 +613,9 @@ export function App() {
                         bestMove={result?.bestMove ?? lines[0]?.pv[0]}
                         showArrow={showArrow}
                       />
-                      <div className="player-row bottom-player">
+                      <div
+                        className={`player-row bottom-player ${chess.turn() === (flipped ? 'b' : 'w') ? 'side-to-move' : ''}`}
+                      >
                         <span
                           className={`player-avatar ${flipped ? 'black-player' : 'white-player'}`}
                         >

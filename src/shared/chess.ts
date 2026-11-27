@@ -212,10 +212,12 @@ export function classifyMove(
     0,
     Math.round((scoreCp(before) - scoreCp(after)) * (color === 'w' ? 1 : -1)),
   );
+  const mateDelivered =
+    after.type === 'mate' && after.winner === color && Math.abs(after.value) <= 1;
   if (details.bookMove) return { classification: 'book', lossCp: 0, uncertain };
   if (playedBest) {
     return {
-      classification: details.sacrifice ? 'brilliant' : 'best',
+      classification: details.sacrifice || mateDelivered ? 'brilliant' : 'best',
       lossCp: 0,
       uncertain,
     };
@@ -224,8 +226,14 @@ export function classifyMove(
   if (details.mateOpportunityMissed && loss >= 100) {
     return { classification: 'miss', lossCp: loss, uncertain: false };
   }
+  if (mateDelivered && loss <= 50) {
+    return { classification: 'brilliant', lossCp: loss, uncertain: false };
+  }
   if (loss === 0 && details.sacrifice) {
     return { classification: 'great', lossCp: loss, uncertain: false };
+  }
+  if (loss > 0 && loss <= 15 && details.sacrifice) {
+    return { classification: 'brilliant', lossCp: loss, uncertain: false };
   }
   return {
     lossCp: loss,

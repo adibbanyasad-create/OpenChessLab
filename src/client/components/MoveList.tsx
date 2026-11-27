@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Download, FileDown, List, Sparkles, Square } from 'lucide-react';
 import type { GameData, GameMove, ReviewResult } from '../../shared/types';
+import { LabelGlyph } from './LabelGlyph';
 
 export function MoveList({
   game,
@@ -97,24 +98,12 @@ export function MoveList({
                     }
                   >
                     <span>{move.san}</span>
-                    {annotation?.uncertain && <span className="move-annotation uncertain">~</span>}
-                    {annotation &&
-                      !annotation.uncertain &&
-                      annotation.classification !== 'good' &&
-                      annotation.classification !== 'book' && (
-                        <span className={`move-annotation ${annotation.classification}`}>
-                          {annotation.classification === 'blunder'
-                            ? '??'
-                            : annotation.classification === 'mistake' ||
-                                annotation.classification === 'miss'
-                              ? '?'
-                              : annotation.classification === 'inaccuracy'
-                                ? '?!'
-                                : annotation.classification === 'brilliant'
-                                  ? '!!'
-                                  : '!'}
-                        </span>
-                      )}
+                    {annotation && annotation.classification !== 'good' && (
+                      <LabelGlyph
+                        classification={annotation.classification}
+                        uncertain={annotation.uncertain}
+                      />
+                    )}
                   </button>
                 ) : (
                   <span key={color} />
@@ -176,7 +165,7 @@ export function MoveList({
               ] as const
             ).map((kind) => (
               <span className={kind} key={kind}>
-                <i />
+                <LabelGlyph classification={kind} size={14} />
                 {
                   review.annotations.filter(
                     (annotation) => !annotation.uncertain && annotation.classification === kind,
@@ -190,7 +179,7 @@ export function MoveList({
                 className="uncertain"
                 title="Moves whose adjacent evaluations did not confirm the requested depth"
               >
-                <i />~ uncertain estimates
+                <LabelGlyph classification="good" uncertain size={14} />~ uncertain estimates
               </span>
             )}
           </div>

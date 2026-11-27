@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   Info,
 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { formatScore, scoreDescription } from '../../shared/chess';
 import type {
   AnalysisResult,
@@ -59,6 +60,15 @@ export function EnginePanel({
   onDocs: () => void;
 }) {
   const first = lines[0];
+  const scoreText = formatScore(first?.score);
+  const scoreRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const node = scoreRef.current;
+    if (!node || !first) return;
+    node.classList.remove('score-tick');
+    void node.offsetWidth;
+    node.classList.add('score-tick');
+  }, [scoreText]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <section className="card engine-card" aria-label="Engine analysis">
       <div className="card-heading">
@@ -114,10 +124,11 @@ export function EnginePanel({
         </div>
         <div className="score-block">
           <strong
+            ref={scoreRef}
             className={`main-score ${first?.score.type === 'mate' ? 'mate' : ''}`}
             data-testid="engine-score"
           >
-            {formatScore(first?.score)}
+            {scoreText}
           </strong>
           <div>
             <span className="score-verdict">

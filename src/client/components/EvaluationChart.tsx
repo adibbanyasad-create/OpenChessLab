@@ -73,6 +73,7 @@ export function EvaluationChart({
               <path
                 d={`${path} L ${x(total)} ${height} L ${x(0)} ${height} Z`}
                 fill="url(#chart-fill)"
+                className="chart-area"
               />
               <path
                 d={path}
@@ -80,22 +81,54 @@ export function EvaluationChart({
                 stroke="#38815c"
                 strokeWidth="2.5"
                 strokeLinejoin="round"
+                className="chart-line"
+                pathLength={100}
               />
             </>
           )}
-          {points.map((point) => (
-            <circle
-              key={point.ply}
-              cx={x(point.ply)}
-              cy={y(point.score)}
-              r={point.ply === ply ? 4 : 2}
-              fill="#2a7651"
-            >
-              <title>
-                Half-move {point.ply}: {formatScore(point.score)}
-              </title>
-            </circle>
-          ))}
+          {points.map((point) => {
+            const annotation = review?.annotations.find((candidate) => candidate.ply === point.ply);
+            const marker =
+              annotation && !annotation.uncertain
+                ? annotation.classification === 'blunder'
+                  ? '??'
+                  : annotation.classification === 'brilliant'
+                    ? '!!'
+                    : annotation.classification === 'mistake' ||
+                        annotation.classification === 'miss'
+                      ? '?'
+                      : annotation.classification === 'inaccuracy'
+                        ? '?!'
+                        : annotation.classification === 'great' ||
+                            annotation.classification === 'excellent'
+                          ? '!'
+                          : null
+                : null;
+            return (
+              <g key={point.ply}>
+                <circle
+                  cx={x(point.ply)}
+                  cy={y(point.score)}
+                  r={point.ply === ply ? 4 : 2}
+                  fill={marker && marker.includes('?') ? '#9c524a' : '#2a7651'}
+                >
+                  <title>
+                    Half-move {point.ply}: {formatScore(point.score)}
+                  </title>
+                </circle>
+                {marker && (
+                  <text
+                    x={x(point.ply)}
+                    y={Math.max(12, y(point.score) - 8)}
+                    textAnchor="middle"
+                    className={`chart-marker ${marker.includes('?') ? 'bad' : 'good'}`}
+                  >
+                    {marker}
+                  </text>
+                )}
+              </g>
+            );
+          })}
           <line
             x1={x(ply)}
             y1="5"

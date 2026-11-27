@@ -25,6 +25,21 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Think one move further.' })).toBeVisible();
 });
 
+test('toggles synthesized sounds without page errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await pauseAnalysis(page);
+  const toggle = page.getByRole('button', { name: /sounds/ });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(toggle).toHaveAccessibleName('Enable sounds');
+  expect(await page.evaluate(() => localStorage.getItem('ocl-sound-v1'))).toBe('off');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  expect(errors).toEqual([]);
+});
+
 test('loads a real UCI evaluation and configurable principal variations', async ({
   page,
 }, info) => {
@@ -191,8 +206,16 @@ test('reviews a real game and visualizes its measured turning points', async ({ 
   await expect(page.getByRole('button', { name: 'Go to move 2. g4', exact: true })).toHaveClass(
     /blunder/,
   );
+  await expect(
+    page
+      .getByRole('button', { name: 'Go to move 2. g4', exact: true })
+      .getByRole('img', { name: 'Blunder' }),
+  ).toBeVisible();
   await expect(page.getByRole('img', { name: /Game evaluation by half-move/ })).toBeVisible();
   await expect(page.locator('.review-summary')).toContainText('blunders');
+  await expect(page.locator('.review-summary .label-glyph.kind-blunder')).toBeVisible();
+  await expect(page.locator('.chart-marker.bad')).not.toHaveCount(0);
+  await expect(page.locator('.chart-marker.bad', { hasText: '??' })).toHaveCount(1);
   await expect(page.locator('.review-report')).toContainText('accuracy');
   await expect(page.locator('.review-opening')).toBeVisible();
   await expect(page.locator('.error-message')).toHaveCount(0);
