@@ -101,8 +101,21 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node scripts/build-desktop.mjs
+        timeout-minutes: 12
       - name: Smoke-test the executable
+        timeout-minutes: 8
         run: node scripts/smoke-desktop.mjs dist/desktop/OpenChessLab.exe 3210
+      - name: Verify stamped EXE icon and version
+        run: |
+          $shell = New-Object -ComObject Shell.Application
+          $folder = $shell.Namespace((Resolve-Path dist/desktop).Path)
+          $item = $folder.ParseName('OpenChessLab.exe')
+          $desc = $folder.GetDetailsOf($item, 34)
+          if ([string]::IsNullOrWhiteSpace($desc)) { throw 'EXE file description is missing; rcedit stamping did not apply.' }
+          Write-Host "File description: $desc"
+          $sig = Get-Content dist/desktop/OpenChessLab.exe -AsByteStream -ReadCount 4 -TotalCount 2
+          if ($sig[0] -ne 0x4D -or $sig[1] -ne 0x5A) { throw 'EXE magic bytes are wrong.' }
+          Write-Host 'MZ header OK'
       - name: Preserve desktop executable
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

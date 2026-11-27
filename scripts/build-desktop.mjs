@@ -106,6 +106,22 @@ try {
   if (injected.error || injected.status !== 0)
     throw new Error(injected.error?.message ?? injected.stderr);
 
+  // 3b. On Windows, stamp the executable icon + version metadata with the
+  // pure-JS resedit library (in-process: no external binary that can hang).
+  // Other platforms keep the Node default icon.
+  if (isWindows) {
+    const stamped = spawnSync(
+      process.execPath,
+      [join(root, 'scripts/stamp-windows-icon.mjs'), binaryPath, version],
+      { encoding: 'utf8', timeout: 120_000 },
+    );
+    if (stamped.error || stamped.status !== 0)
+      throw new Error(
+        `Icon stamping failed (signal ${stamped.signal ?? 'none'}): ${stamped.stdout ?? ''}${stamped.error?.message ?? stamped.stderr}`,
+      );
+    console.log((stamped.stdout ?? '').trim());
+  }
+
   // 4. Stage the runtime companions the single file cannot embed: the web
   // client, the Stockfish engine scripts, and a Node runtime for engines.
   const companions = [
