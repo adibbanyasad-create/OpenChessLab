@@ -2,6 +2,18 @@
 
 Meaningful changes are recorded here. Source publication and a tagged GitHub release are separate events; no release or deployment is implied by a version heading alone.
 
+## 0.6.1 - Unreleased
+
+### Fixed
+
+- Android launcher icons and splash screens are regenerated from committed master SVGs with pixel verification, replacing the near-blank rasters that shipped in 0.6.0.
+- The Windows executable now carries the knight icon and file/product version metadata stamped at build time.
+
+### Added
+
+- Committed master icon artwork (`assets/icons/`): app tile SVG, adaptive foreground SVG, and multi-resolution `.ico`.
+- `npm run icons:make` (Android PNGs) and `npm run icons:windows` (ICO) regenerate all rasters with opaque-coverage gates.
+
 ## 0.6.0 - Unreleased
 
 ### Added

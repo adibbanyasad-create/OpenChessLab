@@ -106,6 +106,38 @@ try {
   if (injected.error || injected.status !== 0)
     throw new Error(injected.error?.message ?? injected.stderr);
 
+  // 3b. On Windows, stamp the executable icon + version metadata. rcedit only
+  // runs on Windows; other platforms keep the Node default icon.
+  if (isWindows) {
+    const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+    const [major = '0', minor = '0', patch = '0'] = version.split('.');
+    const stamped = spawnSync(
+      join(root, 'node_modules/rcedit/bin/rcedit-x64.exe'),
+      [
+        binaryPath,
+        '--set-icon',
+        join(root, 'assets/icons/openchesslab-icon.ico'),
+        '--set-file-version',
+        `${major}.${minor}.${patch}.0`,
+        '--set-product-version',
+        `${major}.${minor}.${patch}.0`,
+        '--set-version-string',
+        'CompanyName',
+        'OpenChessLab',
+        '--set-version-string',
+        'FileDescription',
+        'OpenChessLab - local-first chess analysis workspace',
+        '--set-version-string',
+        'ProductName',
+        'OpenChessLab',
+      ],
+      { encoding: 'utf8' },
+    );
+    if (stamped.error || stamped.status !== 0)
+      throw new Error(stamped.error?.message ?? stamped.stderr);
+    console.log('Stamped Windows icon and version metadata.');
+  }
+
   // 4. Stage the runtime companions the single file cannot embed: the web
   // client, the Stockfish engine scripts, and a Node runtime for engines.
   const companions = [

@@ -1,6 +1,6 @@
 {
   "name": "openchesslab",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "A local-first chess analysis and UCI engine experimentation workspace.",
   "private": true,
   "type": "module",
@@ -24,11 +24,13 @@
     "docs:check": "node scripts/check-docs.mjs",
     "smoke:http": "node scripts/smoke-http.mjs",
     "capture:ui": "node scripts/capture-ui.mjs",
+    "icons:make": "node scripts/make-launcher-icons.mjs",
     "check": "npm run lint && npm run typecheck && npm run docs:check && npm test",
     "security": "npm audit --audit-level=high",
     "release:pack": "npm run build && node scripts/package-release.mjs",
     "bundle:verify": "node scripts/verify-bundle.mjs",
-    "regress": "node scripts/regress.mjs"
+    "regress": "node scripts/regress.mjs",
+    "icons:windows": "node scripts/make-windows-icon.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.6.3",
@@ -56,6 +58,7 @@
     "@capacitor/cli": "8.6.3",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.65.1",
+    "@resvg/resvg-js": "2.6.2",
     "@types/node": "^22.19.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -68,6 +71,7 @@
     "globals": "^17.0.0",
     "postject": "1.0.0-alpha.6",
     "prettier": "^3.10.1",
+    "rcedit": "5.0.2",
     "tsx": "^4.23.15",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.74.0",
