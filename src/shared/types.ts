@@ -97,6 +97,12 @@ export interface AnalysisResult {
   terminal: boolean;
 }
 
+export interface ReviewRefutation {
+  punishmentMove: string;
+  punishmentSan: string;
+  lineSan: string[];
+}
+
 export interface ReviewAnnotation {
   ply: number;
   san: string;
@@ -106,6 +112,7 @@ export interface ReviewAnnotation {
   uncertain: boolean;
   phase: 'opening' | 'middlegame' | 'endgame';
   bookMove: boolean;
+  refutation?: ReviewRefutation;
 }
 
 export interface ReviewPlayerSummary {

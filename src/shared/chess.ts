@@ -279,3 +279,26 @@ export function gamePhase(ply: number, totalPlies: number): 'opening' | 'middleg
 export function squareName(file: number, rank: number): Square {
   return `${'abcdefgh'[file]}${rank}` as Square;
 }
+
+/**
+ * Creates a null-move position by passing the turn to the opponent.
+ * Returns null if the king of the side to move is currently in check or
+ * if passing produces an illegal board state.
+ */
+export function makeNullMove(fen: string): string | null {
+  const chess = validPosition(fen);
+  if (chess.isCheck()) return null;
+  const parts = fen.trim().split(/\s+/);
+  if (parts.length < 4) return null;
+  const turn = parts[1] === 'w' ? 'b' : 'w';
+  const halfmove = parts[4] ? Number(parts[4]) + 1 : 1;
+  const fullmove =
+    parts[1] === 'b' ? (parts[5] ? Number(parts[5]) + 1 : 1) : (parts[5] ? Number(parts[5]) : 1);
+  const nullFen = `${parts[0]} ${turn} ${parts[2]} - ${halfmove} ${fullmove}`;
+  try {
+    validPosition(nullFen);
+    return nullFen;
+  } catch {
+    return null;
+  }
+}

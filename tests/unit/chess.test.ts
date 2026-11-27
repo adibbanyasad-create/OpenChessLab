@@ -8,6 +8,7 @@ import {
   DEFAULT_POSITION,
   formatScore,
   gamePhase,
+  makeNullMove,
   meanScoreCp,
   moveAccuracy,
   gameFromFen,
@@ -237,5 +238,21 @@ describe('score semantics', () => {
         'w',
       ).classification,
     ).not.toBe('brilliant');
+  });
+  it('creates legal null-move positions and rejects moves during check', () => {
+    const startNull = makeNullMove(DEFAULT_POSITION);
+    expect(startNull).toBe('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 1 1');
+    // En-passant square must be cleared on null move
+    const epFen = 'rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2';
+    const epNull = makeNullMove(epFen);
+    expect(epNull).toBe('rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR b KQkq - 1 2');
+    // Cannot pass turn when king is in check
+    const checkFen = 'rnbqkbnr/ppp2ppp/4p3/3p4/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 3';
+    expect(makeNullMove(checkFen)).not.toBeNull();
+    const inCheck = 'rnb1kbnr/pppp1ppp/4p3/8/7q/5P2/PPPPP1PP/RNBQKBNR w KQkq - 1 3';
+    expect(makeNullMove(inCheck)).toBeNull();
+    // Checkmate position
+    const checkmate = 'rnb1kbnr/pppp1ppp/4p3/8/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3';
+    expect(makeNullMove(checkmate)).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Chess, type PieceSymbol, type Square } from 'chess.js';
 import { formatScore, scoreCp, squareName } from '../../shared/chess';
 import type { Score } from '../../shared/types';
@@ -23,6 +23,10 @@ export function ChessBoard({
   lastMove,
   bestMove,
   showArrow,
+  threatMove,
+  showThreat,
+  refutationMove,
+  showRefutation,
 }: {
   fen: string;
   flipped: boolean;
@@ -31,6 +35,10 @@ export function ChessBoard({
   lastMove?: { from: string; to: string };
   bestMove?: string | null;
   showArrow: boolean;
+  threatMove?: string | null;
+  showThreat?: boolean;
+  refutationMove?: string | null;
+  showRefutation?: boolean;
 }) {
   const chess = new Chess(fen);
   const previousFen = useRef(fen);
@@ -98,6 +106,12 @@ export function ChessBoard({
   };
   const arrowFrom = bestMove ? point(bestMove.slice(0, 2)) : undefined;
   const arrowTo = bestMove ? point(bestMove.slice(2, 4)) : undefined;
+  const threatFrom = showThreat && threatMove ? point(threatMove.slice(0, 2)) : undefined;
+  const threatTo = showThreat && threatMove ? point(threatMove.slice(2, 4)) : undefined;
+  const refutationFrom =
+    showRefutation && refutationMove ? point(refutationMove.slice(0, 2)) : undefined;
+  const refutationTo =
+    showRefutation && refutationMove ? point(refutationMove.slice(2, 4)) : undefined;
   return (
     <div className="board-with-eval">
       <div
@@ -160,12 +174,14 @@ export function ChessBoard({
             </button>
           );
         })}
-        {showArrow && arrowFrom && arrowTo && (
+        {((showArrow && arrowFrom && arrowTo) ||
+          (showThreat && threatFrom && threatTo) ||
+          (showRefutation && refutationFrom && refutationTo)) && (
           <svg
             viewBox="0 0 800 800"
             className="board-arrow"
             aria-hidden="true"
-            key={`${bestMove}-${flipped ? 'f' : 'w'}`}
+            key={`${bestMove}-${threatMove}-${refutationMove}-${flipped ? 'f' : 'w'}`}
           >
             <defs>
               <marker
@@ -177,20 +193,72 @@ export function ChessBoard({
                 markerHeight="3.2"
                 orient="auto-start-reverse"
               >
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#7d631c" />
+              </marker>
+              <marker
+                id="threat-arrowhead"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="3.2"
+                markerHeight="3.2"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#d64032" />
+              </marker>
+              <marker
+                id="refutation-arrowhead"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="3.2"
+                markerHeight="3.2"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#9c27b0" />
               </marker>
             </defs>
-            <line
-              x1={arrowFrom.x}
-              y1={arrowFrom.y}
-              x2={arrowTo.x}
-              y2={arrowTo.y}
-              stroke="currentColor"
-              strokeWidth="18"
-              strokeLinecap="round"
-              markerEnd="url(#arrowhead)"
-              style={{ '--arrow-opacity': 0.62 } as CSSProperties}
-            />
+            {showArrow && arrowFrom && arrowTo && (
+              <line
+                x1={arrowFrom.x}
+                y1={arrowFrom.y}
+                x2={arrowTo.x}
+                y2={arrowTo.y}
+                stroke="#7d631c"
+                strokeWidth="18"
+                strokeLinecap="round"
+                markerEnd="url(#arrowhead)"
+                style={{ opacity: 0.72 }}
+              />
+            )}
+            {showThreat && threatFrom && threatTo && (
+              <line
+                x1={threatFrom.x}
+                y1={threatFrom.y}
+                x2={threatTo.x}
+                y2={threatTo.y}
+                stroke="#d64032"
+                strokeWidth="18"
+                strokeLinecap="round"
+                markerEnd="url(#threat-arrowhead)"
+                style={{ opacity: 0.85 }}
+                className="threat-line"
+              />
+            )}
+            {showRefutation && refutationFrom && refutationTo && (
+              <line
+                x1={refutationFrom.x}
+                y1={refutationFrom.y}
+                x2={refutationTo.x}
+                y2={refutationTo.y}
+                stroke="#9c27b0"
+                strokeWidth="18"
+                strokeLinecap="round"
+                markerEnd="url(#refutation-arrowhead)"
+                style={{ opacity: 0.85 }}
+                className="refutation-line"
+              />
+            )}
           </svg>
         )}
       </div>

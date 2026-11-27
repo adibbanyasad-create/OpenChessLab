@@ -19,6 +19,8 @@ export interface PositionAnalysis {
   depth: number | null;
   depthLimited: boolean;
   bestMove: string | null;
+  pv?: string[];
+  san?: string[];
 }
 
 export function emptyCounts(): Record<Classification, number> {
@@ -59,17 +61,28 @@ export function annotateMove(
     after.score.type === 'cp' &&
     Math.abs(after.score.value) > 150 &&
     (move.san.includes('x') || move.san.includes('+'));
+  const classified = classifyMove(before.score, after.score, move.color, before.bestMove === uci, uncertain, {
+    bookMove: move.ply <= openingPlies,
+    mateOpportunityMissed,
+    sacrifice,
+  });
+  const isError = ['inaccuracy', 'mistake', 'miss', 'blunder'].includes(classified.classification);
+  const refutation =
+    isError && after.bestMove && after.san?.length
+      ? {
+          punishmentMove: after.bestMove,
+          punishmentSan: after.san[0]!,
+          lineSan: after.san.slice(0, 5),
+        }
+      : undefined;
   return {
     ply: move.ply,
     san: move.san,
     bestMove: before.bestMove,
     phase: gamePhase(move.ply, totalPlies),
     bookMove: move.ply <= openingPlies,
-    ...classifyMove(before.score, after.score, move.color, before.bestMove === uci, uncertain, {
-      bookMove: move.ply <= openingPlies,
-      mateOpportunityMissed,
-      sacrifice,
-    }),
+    ...(refutation ? { refutation } : {}),
+    ...classified,
   };
 }
 

@@ -59,6 +59,8 @@ export async function reviewGame(
         depth: analysis.completedDepth,
         depthLimited: analysis.depthLimited,
         bestMove: analysis.bestMove,
+        pv: analysis.lines[0]?.pv,
+        san: analysis.lines[0]?.san,
       });
     }
     return {

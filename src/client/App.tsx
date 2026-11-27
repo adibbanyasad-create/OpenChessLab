@@ -37,18 +37,30 @@ import {
   Volume2,
   VolumeX,
   X,
+  AlertTriangle,
+  Target,
 } from 'lucide-react';
 import { Chess } from 'chess.js';
-import { branchGame, DEFAULT_POSITION, gameFromFen, OPERA_PGN, parseGame } from '../shared/chess';
+import {
+  branchGame,
+  DEFAULT_POSITION,
+  gameFromFen,
+  makeNullMove,
+  OPERA_PGN,
+  parseGame,
+} from '../shared/chess';
 import { reviewCsv } from '../shared/csv';
+import { exportBlunderAnkiCsv, exportBlunderStudyPgn } from '../shared/study';
 import type {
   AnalysisResult,
   EngineDescriptor,
   GameData,
+  Job,
   ReviewResult,
+  Score,
   SearchSettings,
 } from '../shared/types';
-import { api, downloadFile, getToken, setToken } from './api';
+import { api, downloadFile, followJob, getToken, setToken } from './api';
 import { nativeConfirmExit, nativeTap, useNativeChrome } from './native';
 import { isSoundEnabled, playSound, setSoundEnabled } from './sounds';
 import { isOfflineEngineAvailable, useOfflineJob } from './offlineEngine';
@@ -126,6 +138,21 @@ export function App() {
   const [doc, setDoc] = useState('overview');
   const [sound, setSound] = useState(isSoundEnabled);
   const announcedReview = useRef('');
+
+  // Threat & refutation visualizers
+  const [showThreat, setShowThreat] = useState(false);
+  const [threat, setThreat] = useState<{ move: string; san?: string; score?: Score } | null>(null);
+  const [threatBusy, setThreatBusy] = useState(false);
+  const [showRefutation, setShowRefutation] = useState(false);
+
+  // Interactive blunder training mode
+  const [training, setTraining] = useState<{
+    active: boolean;
+    errorIndex: number;
+    solved: boolean;
+    feedback: string;
+  } | null>(null);
+
   const analysis = useRemoteJob<AnalysisResult>();
   const reviewJob = useRemoteJob<ReviewResult>();
   const offline = useOfflineJob();
@@ -175,6 +202,22 @@ export function App() {
         ply: Math.max(0, Math.min(next, current.game.moves.length)),
       })),
     );
+
+  useEffect(() => {
+    setThreat(null);
+    setShowThreat(false);
+    setShowRefutation(false);
+  }, [fen]);
+
+  const currentAnnotation = review?.annotations.find((a) => a.ply === ply);
+  const trainingErrors = (review?.annotations ?? []).filter(
+    (a) => !a.uncertain && ['blunder', 'mistake', 'miss'].includes(a.classification) && a.bestMove,
+  );
+  const currentTrainingError =
+    training && training.active ? trainingErrors[training.errorIndex] : undefined;
+  const currentTrainingMove = currentTrainingError
+    ? game.moves[currentTrainingError.ply - 1]
+    : undefined;
 
   useEffect(() => {
     if (moveFocus.current) {
@@ -334,13 +377,152 @@ export function App() {
       setView('analysis');
     });
   };
+
   const playMove = (move: string) => {
+    if (training?.active && currentTrainingError) {
+      if (training.solved) return;
+      if (move === currentTrainingError.bestMove) {
+        playSound('brilliant');
+        setTraining((t) =>
+          t ? { ...t, solved: true, feedback: 'Brilliant! You found the right move.' } : null,
+        );
+        try {
+          changeGame(branchGame(game, ply, move));
+          moveFocus.current = move.slice(2, 4);
+          nativeTap();
+        } catch {
+          /* Fallback */
+        }
+      } else {
+        playSound('check');
+        setTraining((t) =>
+          t
+            ? { ...t, solved: false, feedback: 'Not quite. Try another move or use a hint!' }
+            : null,
+        );
+      }
+      return;
+    }
     try {
       changeGame(branchGame(game, ply, move));
       moveFocus.current = move.slice(2, 4);
       nativeTap();
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'This move is not legal.');
+    }
+  };
+
+  const toggleThreat = async () => {
+    if (showThreat) {
+      setShowThreat(false);
+      setThreat(null);
+      return;
+    }
+    if (chess.isCheck()) {
+      setToast('Cannot calculate threat: king is currently in check.');
+      return;
+    }
+    const nullFen = makeNullMove(fen);
+    if (!nullFen) {
+      setToast('Opponent threat is unavailable in this position.');
+      return;
+    }
+    setShowThreat(true);
+    setThreatBusy(true);
+    try {
+      if (offlineActive) {
+        const res = await offline.run({ fen: nullFen, depth: 6, multiPv: 1, timeLimitMs: 1500 });
+        if (res?.lines[0]) {
+          setThreat({
+            move: res.bestMove ?? res.lines[0].pv[0] ?? '',
+            san: res.lines[0].san[0],
+            score: res.lines[0].score,
+          });
+        }
+      } else {
+        const job = await api<Job<AnalysisResult>>('/analysis', {
+          method: 'POST',
+          body: JSON.stringify({
+            fen: nullFen,
+            engineId,
+            depth: 8,
+            threads: 1,
+            hash: 16,
+            multiPv: 1,
+          }),
+        });
+        const res = await followJob(job, new AbortController().signal, () => undefined);
+        if (res?.lines[0]) {
+          setThreat({
+            move: res.bestMove ?? res.lines[0].pv[0] ?? '',
+            san: res.lines[0].san[0],
+            score: res.lines[0].score,
+          });
+        }
+      }
+    } catch {
+      setToast('Unable to calculate threat.');
+    } finally {
+      setThreatBusy(false);
+    }
+  };
+
+  const startTraining = () => {
+    if (!trainingErrors.length) {
+      setToast('No blunders found to practice in this game.');
+      return;
+    }
+    setTraining({
+      active: true,
+      errorIndex: 0,
+      solved: false,
+      feedback: '',
+    });
+    setPly(trainingErrors[0]!.ply - 1);
+    setToast('Practice mode: Find the best move!');
+  };
+
+  const exitTraining = () => {
+    setTraining(null);
+  };
+
+  const nextTrainingError = () => {
+    if (!training) return;
+    const nextIdx = training.errorIndex + 1;
+    if (nextIdx >= trainingErrors.length) {
+      setTraining(null);
+      playSound('brilliant');
+      setToast('Congratulations! You practiced all blunders in this game.');
+      return;
+    }
+    setTraining({
+      active: true,
+      errorIndex: nextIdx,
+      solved: false,
+      feedback: '',
+    });
+    setPly(trainingErrors[nextIdx]!.ply - 1);
+  };
+
+  const showTrainingHint = () => {
+    if (!currentTrainingError?.bestMove) return;
+    const fromSquare = currentTrainingError.bestMove.slice(0, 2);
+    setToast(`Hint: Move the piece on ${fromSquare}`);
+    playSound('select');
+  };
+
+  const revealTrainingSolution = () => {
+    if (!currentTrainingError?.bestMove) return;
+    const uci = currentTrainingError.bestMove;
+    setTraining((t) =>
+      t
+        ? { ...t, solved: true, feedback: `Best move was: ${currentTrainingError.bestMove}` }
+        : null,
+    );
+    try {
+      changeGame(branchGame(game, ply, uci));
+    } catch {
+      /* Fallback */
     }
   };
   const navigate = (next: View) => {
@@ -671,6 +853,73 @@ export function App() {
                           )}
                         </span>
                       </div>
+                      {training?.active && currentTrainingError && (
+                        <div
+                          className="training-banner"
+                          role="region"
+                          aria-label="Blunder practice mode"
+                        >
+                          <div className="training-banner-header">
+                            <span className="training-banner-badge">
+                              <Target size={14} />
+                              Blunder practice ({training.errorIndex + 1} of {trainingErrors.length}
+                              )
+                            </span>
+                            <button
+                              type="button"
+                              className="icon-button small"
+                              onClick={exitTraining}
+                              aria-label="Exit practice mode"
+                              title="Exit practice mode"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                          <p className="training-prompt">
+                            {currentTrainingMove?.color === 'w' ? 'White' : 'Black'} played{' '}
+                            <strong className="error-move">{currentTrainingError.san}</strong> (
+                            {currentTrainingError.classification}). What should you play instead?
+                          </p>
+                          {training.feedback && (
+                            <p
+                              className={`training-feedback ${training.solved ? 'success' : 'retry'}`}
+                            >
+                              {training.feedback}
+                            </p>
+                          )}
+                          <div className="training-actions">
+                            {training.solved ? (
+                              <button
+                                type="button"
+                                className="button primary small"
+                                onClick={nextTrainingError}
+                              >
+                                {training.errorIndex + 1 < trainingErrors.length
+                                  ? 'Next blunder'
+                                  : 'Finish practice'}
+                                <ArrowRight size={14} />
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="button secondary small"
+                                  onClick={showTrainingHint}
+                                >
+                                  Hint
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-button tiny"
+                                  onClick={revealTrainingSolution}
+                                >
+                                  Show solution
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       <ChessBoard
                         key={`${fen}-${flipped}`}
                         fen={fen}
@@ -680,6 +929,10 @@ export function App() {
                         lastMove={game.moves[ply - 1]}
                         bestMove={result?.bestMove ?? lines[0]?.pv[0]}
                         showArrow={showArrow}
+                        threatMove={threat?.move}
+                        showThreat={showThreat}
+                        refutationMove={currentAnnotation?.refutation?.punishmentMove}
+                        showRefutation={showRefutation}
                       />
                       <div
                         className={`player-row bottom-player ${chess.turn() === (flipped ? 'b' : 'w') ? 'side-to-move' : ''}`}
@@ -769,6 +1022,20 @@ export function App() {
                         >
                           <ArrowUpRight size={20} />
                         </button>
+                        <button
+                          className={`icon-button ${showThreat ? 'toggled threat-btn' : ''}`}
+                          onClick={() => {
+                            void toggleThreat();
+                          }}
+                          aria-label={showThreat ? 'Hide opponent threat' : 'Show opponent threat'}
+                          aria-pressed={showThreat}
+                          title={
+                            showThreat ? 'Hide threat' : 'Show opponent threat (what if you pass?)'
+                          }
+                          disabled={threatBusy}
+                        >
+                          <AlertTriangle size={17} />
+                        </button>
                       </div>
                     </section>
                     <EvaluationChart
@@ -837,6 +1104,33 @@ export function App() {
                       onExportReview={() => {
                         void exportReview();
                       }}
+                      onExportBlunderPgn={() => {
+                        if (!review) return;
+                        const pgn = exportBlunderStudyPgn(game, review);
+                        if (!pgn) {
+                          setToast('No blunders found to export in this review.');
+                          return;
+                        }
+                        downloadFile(
+                          'openchesslab-blunder-study.pgn',
+                          pgn,
+                          'application/x-chess-pgn',
+                        );
+                        setToast('Blunder study PGN exported.');
+                      }}
+                      onExportAnki={() => {
+                        if (!review) return;
+                        const csv = exportBlunderAnkiCsv(game, review);
+                        if (!csv) {
+                          setToast('No blunders found to export in this review.');
+                          return;
+                        }
+                        downloadFile('openchesslab-anki-cards.csv', csv, 'text/csv');
+                        setToast('Anki flashcards CSV exported.');
+                      }}
+                      onStartTraining={trainingErrors.length > 0 ? startTraining : undefined}
+                      showRefutation={showRefutation}
+                      onToggleRefutation={() => setShowRefutation(!showRefutation)}
                     />
                     {reviewError && (
                       <div className="error-message" role="alert">
