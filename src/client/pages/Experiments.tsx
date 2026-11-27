@@ -66,8 +66,9 @@ export function Experiments({
   const [selectedRun, setSelectedRun] = useState<BenchmarkResult>();
   const job = useRemoteJob<BenchmarkResult>();
   const result = selectedRun ?? history[0];
+  const offlineOnly = engines.length === 1 && engines[0]?.id === 'stockfish-offline';
   const execute = async () => {
-    if (!validDepth) return;
+    if (!validDepth || offlineOnly) return;
     if (suite === 'custom') {
       try {
         validPosition(customFen.trim());
@@ -305,12 +306,21 @@ export function Experiments({
                 {job.error}
               </div>
             )}
+            {offlineOnly && (
+              <div className="inline-note" role="status">
+                <Info size={15} />
+                Comparisons and benchmarks need the engine service. Analysis and game reviews work
+                offline on this device.
+              </div>
+            )}
             <button
               className="button primary run-experiment"
               disabled={
-                !job.busy &&
-                (!validDepth || !selected.length || !engines.length || selected.length > 4)
+                offlineOnly ||
+                (!job.busy &&
+                  (!validDepth || !selected.length || !engines.length || selected.length > 4))
               }
+              title={offlineOnly ? 'Needs the engine service' : undefined}
               onClick={() => {
                 if (job.busy) void job.cancel();
                 else void execute();

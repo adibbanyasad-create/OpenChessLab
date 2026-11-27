@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { Chess } from 'chess.js';
 import { branchGame, DEFAULT_POSITION, gameFromFen, OPERA_PGN, parseGame } from '../shared/chess';
+import { reviewCsv } from '../shared/csv';
 import type {
   AnalysisResult,
   EngineDescriptor,
@@ -51,6 +52,7 @@ import { api, downloadFile, getToken, setToken } from './api';
 import { nativeConfirmExit, nativeTap, useNativeChrome } from './native';
 import { isSoundEnabled, playSound, setSoundEnabled } from './sounds';
 import { isOfflineEngineAvailable, useOfflineJob } from './offlineEngine';
+import { useOfflineReview } from './offlineReview';
 import { useRemoteJob } from './useRemoteJob';
 import { BrandMark, ChessPiece } from './components/ChessPiece';
 import { ChessBoard } from './components/ChessBoard';
@@ -127,14 +129,21 @@ export function App() {
   const analysis = useRemoteJob<AnalysisResult>();
   const reviewJob = useRemoteJob<ReviewResult>();
   const offline = useOfflineJob();
+  const offlineReview = useOfflineReview();
   useNativeChrome();
-  useEffect(() => nativeConfirmExit(() => window.close()), []);
+  useEffect(() => nativeConfirmExit(), []);
   const OFFLINE_ID = 'stockfish-offline';
   const offlineActive = engineId === OFFLINE_ID;
   const fen = game.positions[ply] ?? game.initialFen;
   const chess = new Chess(fen);
   const isSample = game.headers.Event === 'A Night at the Opera';
-  const review = reviewedPgn === game.pgn ? reviewJob.job?.result : undefined;
+  const review = offlineActive
+    ? offlineReview.reviewedPgn === game.pgn
+      ? offlineReview.review
+      : undefined
+    : reviewedPgn === game.pgn
+      ? reviewJob.job?.result
+      : undefined;
   const customOptionsKey = JSON.stringify(
     Object.entries(settings.options ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
   );
@@ -154,7 +163,11 @@ export function App() {
   const analysisError = offlineActive ? offline.error : analysis.error;
   const analysisStopped = offlineActive ? offline.stopped : analysis.stopped;
   const currentScore = lines[0]?.score ?? review?.scores[ply]?.score;
-  const reviewBusy = reviewJob.busy;
+  const reviewBusy = offlineActive ? offlineReview.busy : reviewJob.busy;
+  const reviewError = offlineActive ? offlineReview.error : reviewJob.error;
+  const reviewProgress = offlineActive
+    ? offlineReview.progress
+    : (reviewJob.job?.progress.message ?? '');
   const setPly = (next: number) =>
     startTransition(() =>
       setWorkspace((current) => ({
@@ -218,13 +231,14 @@ export function App() {
   }, [toast]);
 
   useEffect(() => {
-    if (!review || reviewJob.busy || announcedReview.current === reviewedPgn) return;
-    announcedReview.current = reviewedPgn;
+    const pgn = offlineActive ? offlineReview.reviewedPgn : reviewedPgn;
+    if (!review || reviewBusy || announcedReview.current === pgn) return;
+    announcedReview.current = pgn;
     const brilliant = review.annotations.some(
       (annotation) => !annotation.uncertain && annotation.classification === 'brilliant',
     );
     playSound(brilliant ? 'brilliant' : 'review');
-  }, [review, reviewJob.busy, reviewedPgn]);
+  }, [review, reviewBusy, reviewedPgn, offlineActive, offlineReview.reviewedPgn]);
 
   const toggleSound = () => {
     const next = !sound;
@@ -345,17 +359,19 @@ export function App() {
   };
   const reviewGame = async () => {
     const intent = ++reviewIntent.current;
-    if (reviewJob.busy) {
-      await reviewJob.cancel();
-      return;
-    }
-    if (offlineActive) {
-      setToast('Game reviews need the engine service. Analysis works offline.');
+    if (reviewBusy) {
+      if (offlineActive) offlineReview.cancel();
+      else await reviewJob.cancel();
       return;
     }
     setLive(false);
     await analysis.cancel();
+    offline.cancel();
     if (intent !== reviewIntent.current) return;
+    if (offlineActive) {
+      await offlineReview.run(game, Math.min(settings.depth, 10));
+      return;
+    }
     setReviewedPgn(game.pgn);
     await reviewJob.run('/reviews', {
       pgn: game.pgn,
@@ -375,8 +391,13 @@ export function App() {
     }
   };
   const exportReview = async () => {
-    const id = reviewJob.job?.id;
-    if (!review || !id) return;
+    if (!review) return;
+    if (offlineActive || !reviewJob.job?.id) {
+      downloadFile(`openchesslab-review-offline-${Date.now()}.csv`, reviewCsv(review), 'text/csv');
+      setToast('Review exported.');
+      return;
+    }
+    const id = reviewJob.job.id;
     try {
       const token = getToken();
       const response = await fetch(`/api/jobs/${id}/export?format=csv`, {
@@ -805,8 +826,8 @@ export function App() {
                       ply={ply}
                       setPly={setPly}
                       review={review}
-                      busy={reviewJob.busy}
-                      progress={reviewJob.job?.progress.message}
+                      busy={reviewBusy}
+                      progress={reviewProgress}
                       onReview={() => {
                         void reviewGame();
                       }}
@@ -817,15 +838,18 @@ export function App() {
                         void exportReview();
                       }}
                     />
-                    {reviewJob.error && (
+                    {reviewError && (
                       <div className="error-message" role="alert">
-                        {reviewJob.error}
+                        {reviewError}
                       </div>
                     )}
                     {review && (
                       <p className="review-disclaimer">
                         Move labels are depth-dependent estimates at up to {review.settings.depth}{' '}
                         plies, not definitive judgments.
+                        {review.engineId === 'stockfish-offline'
+                          ? ' Reviewed on this device with the single-threaded offline engine.'
+                          : ''}
                         {review.scores.some((point) => point.depthLimited)
                           ? ' Some positions did not confirm the requested depth.'
                           : ''}

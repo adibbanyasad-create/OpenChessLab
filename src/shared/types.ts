@@ -131,6 +131,7 @@ export interface ReviewResult {
   annotations: ReviewAnnotation[];
   summary?: ReviewSummary;
   elapsedMs: number;
+  warnings?: string[];
 }
 
 export interface BenchmarkComparison {

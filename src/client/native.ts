@@ -50,13 +50,18 @@ export function nativeTap(): void {
     .catch(() => undefined);
 }
 
-export function nativeConfirmExit(onExit: () => void): () => void {
+export function nativeConfirmExit(): () => void {
   if (!isNativeApp()) return () => undefined;
   let remove: (() => void) | undefined;
   void import('@capacitor/app')
     .then(({ App }) => {
+      // Double-tap back within 2s exits via the real App API; a single tap
+      // is a no-op because window.close() cannot close a native WebView.
+      let lastTap = 0;
       const listener = App.addListener('backButton', () => {
-        if (window.confirm('Leave OpenChessLab? Your workspace is saved on this device.')) onExit();
+        const now = Date.now();
+        if (now - lastTap < 2000) void App.exitApp().catch(() => undefined);
+        lastTap = now;
       });
       listener.then((handle) => {
         remove = () => void handle.remove().catch(() => undefined);

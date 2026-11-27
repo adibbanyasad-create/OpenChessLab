@@ -8,7 +8,6 @@
 //    as a worker; esbuild output is a single self-contained .js file. The
 //    hashed reference in the main bundle is patched to match.
 import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
@@ -31,22 +30,23 @@ const workerFiles = (await readdir(assets)).filter(
 if (workerFiles.length !== 1)
   throw new Error(`Expected exactly one engine-worker bundle, found ${workerFiles.length}.`);
 const from = workerFiles[0];
-const bundled = spawnSync(
-  join(root, 'node_modules/.bin/esbuild'),
-  [
-    join(root, 'src/client/engine-worker.ts'),
-    '--bundle',
-    '--format=iife',
-    '--platform=browser',
-    '--target=es2023',
-    '--minify',
-    '--log-level=warning',
-  ],
-  { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32' },
-);
-if (bundled.error || bundled.status !== 0)
-  throw new Error(bundled.error?.message ?? bundled.stderr);
-const code = bundled.stdout;
+const { buildSync } = await import('esbuild');
+let code;
+try {
+  const result = buildSync({
+    entryPoints: [join(root, 'src/client/engine-worker.ts')],
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2023',
+    minify: true,
+    write: false,
+    logLevel: 'warning',
+  });
+  code = result.outputFiles[0]?.text ?? '';
+} catch (error) {
+  throw new Error('Engine worker esbuild bundle failed.', { cause: error });
+}
 if (!code || /^\s*import[\s{]/m.test(code))
   throw new Error('Engine worker bundle still contains unresolved imports.');
 const digest = createHash('sha256').update(code).digest('hex').slice(0, 8);
