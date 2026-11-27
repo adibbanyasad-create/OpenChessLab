@@ -167,9 +167,12 @@ export async function createApp(
     reply.header('Referrer-Policy', 'no-referrer');
     reply.header('Cross-Origin-Resource-Policy', 'same-origin');
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    // script-src 'wasm-unsafe-eval' allows the bundled offline Stockfish
+    // WebAssembly engine to compile while still blocking eval() and inline
+    // scripts. Plain 'unsafe-eval' is deliberately not used.
     reply.header(
       'Content-Security-Policy',
-      `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors ${config.frameAncestors}`,
+      `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors ${config.frameAncestors}`,
     );
     if (/^\/api(?:\/|\?|$)/.test(_request.url) || _request.routeOptions.url?.startsWith('/api/'))
       reply.header('Cache-Control', 'no-store');
@@ -305,7 +308,15 @@ export async function createApp(
   });
 
   if (existsSync(config.staticRoot)) {
-    await app.register(fastifyStatic, { root: config.staticRoot, maxAge: 0 });
+    await app.register(fastifyStatic, {
+      root: config.staticRoot,
+      maxAge: 0,
+      // The offline engine's WebAssembly binary must compile in the browser;
+      // instantiateStreaming requires the application/wasm MIME type.
+      setHeaders: (reply, path) => {
+        if (path.endsWith('.wasm')) reply.header('Content-Type', 'application/wasm');
+      },
+    });
     app.setNotFoundHandler((request, reply) => {
       if (
         request.method === 'GET' &&

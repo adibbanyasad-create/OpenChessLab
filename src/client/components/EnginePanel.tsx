@@ -115,9 +115,11 @@ export function EnginePanel({
             </select>
             <span className="tiny muted">
               UCI engine <span className="middle-dot">/</span>{' '}
-              {engines.find((engine) => engine.id === engineId)?.kind === 'native'
-                ? 'Native binary'
-                : 'Local WebAssembly'}
+              {engineId === 'stockfish-offline'
+                ? 'On-device worker'
+                : engines.find((engine) => engine.id === engineId)?.kind === 'native'
+                  ? 'Native binary'
+                  : 'Local WebAssembly'}
             </span>
           </div>
           <ChevronDown size={15} className="select-chevron" />

@@ -17,4 +17,15 @@ export default defineConfig({
     proxy: { '/api': 'http://127.0.0.1:3001' },
   },
   build: { outDir: 'dist/client', emptyOutDir: true, sourcemap: true },
+  worker: {
+    format: 'iife' as const,
+    // Force a .js suffix: browsers refuse to execute workers served with a
+    // non-JavaScript MIME type, and some servers mislabel the raw .ts name.
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/engine-worker-[hash].js',
+        chunkFileNames: 'assets/engine-worker-[hash].js',
+      },
+    },
+  },
 });

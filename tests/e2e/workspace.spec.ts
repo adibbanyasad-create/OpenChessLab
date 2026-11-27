@@ -279,6 +279,25 @@ test('compares two real engines and exports measured JSON and CSV', async ({ pag
   expect((await csvPromise).suggestedFilename()).toMatch(/\.csv$/);
 });
 
+test('analyzes fully offline when the engine service is unreachable', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.getByRole('checkbox', { name: 'Live analysis' }).uncheck();
+  await page.route('**/api/**', (route) => route.abort('failed'));
+  await page.reload();
+  await page.getByRole('checkbox', { name: 'Live analysis' }).uncheck();
+  await expect(page.locator('.connection-status')).toContainText('Offline engine ready', {
+    timeout: 15_000,
+  });
+  await expect(page.locator('#engine-select')).toHaveValue('stockfish-offline');
+  await expect(page.locator('.engine-picker .tiny')).toContainText('On-device worker');
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await expect(page.getByTestId('engine-score')).not.toHaveText('—', { timeout: 45_000 });
+  await expect(page.locator('.variation').first()).toBeVisible();
+  await expect(page.locator('.status-label').first()).toHaveText('Complete');
+  expect(errors).toEqual([]);
+});
+
 test('runs Suite v1 and downloads a verifiable experiment bundle', async ({ page }) => {
   await pauseAnalysis(page);
   await page.getByRole('button', { name: 'Benchmarks', exact: true }).click();
